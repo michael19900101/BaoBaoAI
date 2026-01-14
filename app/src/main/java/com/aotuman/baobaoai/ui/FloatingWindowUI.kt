@@ -40,25 +40,18 @@ import com.aotuman.baobaoai.R
 
 @Composable
 fun FloatingWindowUI(
-    isExpanded: Boolean,
     speechText: String,
     isListening: Boolean,
     onToggleExpand: () -> Unit,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit
 ) {
-    val animatedWidth by animateFloatAsState(
-        targetValue = if (isExpanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 300, easing = LinearEasing),
-        label = "expansion"
-    )
     
     Box(
         modifier = Modifier
             .height(80.dp)
             .clip(RoundedCornerShape(40.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-            .clickable(onClick = onToggleExpand)
     ) {
         // 折叠状态下的图标
         Row(
@@ -100,7 +93,7 @@ fun FloatingWindowUI(
             }
             
             // 展开内容
-            AnimatedVisibility(visible = isExpanded) {
+            AnimatedVisibility(visible = isListening) {
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()

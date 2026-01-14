@@ -6,6 +6,8 @@ import android.view.Choreographer
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -419,10 +421,11 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                         this@FloatingWindowController,
                         this@FloatingWindowController
                     ) {
+                        val isListening by _isListening.collectAsState()
+                        val speechText by _speechText.collectAsState()
                         FloatingWindowUI(
-                            isExpanded = false,
-                            speechText = _speechText.value,
-                            isListening = _isListening.value,
+                            speechText = speechText,
+                            isListening = isListening,
                             onToggleExpand = { /* 展开/折叠窗口 */ },
                             onStartListening = { 
                                 onStartListeningCallback?.invoke()

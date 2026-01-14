@@ -63,7 +63,7 @@ class FloatingWindowManager(private val context: Context) {
      * - Type: TYPE_APPLICATION_OVERLAY
      * - Flags: NOT_FOCUSABLE, WATCH_OUTSIDE_TOUCH, LAYOUT_NO_LIMITS
      * - Gravity: BOTTOM | START
-     * - Position: (0, 20) from bottom-left corner
+     * - Position: (20, 20) from bottom-left corner
      *
      * @return configured LayoutParams
      */
@@ -78,7 +78,7 @@ class FloatingWindowManager(private val context: Context) {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.START
-            x = 0
+            x = 20
             y = 20
         }
     }

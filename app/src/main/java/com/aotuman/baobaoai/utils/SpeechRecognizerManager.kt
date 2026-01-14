@@ -2,9 +2,11 @@ package com.aotuman.baobaoai.utils
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,6 +47,49 @@ class SpeechRecognizerManager(private val context: Context) {
         private const val FALLBACK_SAMPLE_RATE = 8000
     }
 
+    private fun hasRecordAudioPermission(): Boolean {
+        return context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun createAudioRecordOrNull(): AudioRecord? {
+        // 常见设备可用组合：不同音频源/采样率兜底
+        val audioSources = intArrayOf(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.MIC
+        )
+        val sampleRates = intArrayOf(SAMPLE_RATE, FALLBACK_SAMPLE_RATE)
+
+        for (source in audioSources) {
+            for (sr in sampleRates) {
+                val minBufferSize = AudioRecord.getMinBufferSize(sr, CHANNEL_CONFIG, AUDIO_FORMAT)
+                if (minBufferSize <= 0) {
+                    Log.w(TAG, "getMinBufferSize failed: source=$source sr=$sr ret=$minBufferSize")
+                    continue
+                }
+                try {
+                    val record = AudioRecord(
+                        source,
+                        sr,
+                        CHANNEL_CONFIG,
+                        AUDIO_FORMAT,
+                        minBufferSize * 2
+                    )
+                    if (record.state == AudioRecord.STATE_INITIALIZED) {
+                        Log.i(TAG, "AudioRecord initialized: source=$source sr=$sr buffer=${minBufferSize * 2}")
+                        return record
+                    } else {
+                        Log.w(TAG, "AudioRecord not initialized: source=$source sr=$sr state=${record.state}")
+                        record.release()
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "AudioRecord create failed: source=$source sr=$sr err=${t.message}", t)
+                }
+            }
+        }
+        return null
+    }
+
     @SuppressLint("MissingPermission")
     fun startListening(
         onResultCallback: (String) -> Unit,
@@ -67,21 +112,14 @@ class SpeechRecognizerManager(private val context: Context) {
         audioBuffer.clear()
 
         try {
-            val minBufferSize = AudioRecord.getMinBufferSize(
-                SAMPLE_RATE,
-                CHANNEL_CONFIG,
-                AUDIO_FORMAT
-            )
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                SAMPLE_RATE,
-                CHANNEL_CONFIG,
-                AUDIO_FORMAT,
-                minBufferSize * 2
-            )
+            if (!hasRecordAudioPermission()) {
+                onErrorCallback("RECORD_AUDIO 权限未授予")
+                return
+            }
 
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                onErrorCallback("AudioRecord initialization failed")
+            audioRecord = createAudioRecordOrNull()
+            if (audioRecord == null) {
+                onErrorCallback("AudioRecord 初始化失败（设备不支持当前录音参数或录音被系统限制）")
                 return
             }
 

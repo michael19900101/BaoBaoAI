@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import com.aotuman.baobaoai.ui.theme.BaoBaoAITheme
+import com.aotuman.baobaoai.utils.SherpaKwsManager
 import com.aotuman.baobaoai.utils.SherpaModelManager
 import com.aotuman.baobaoai.utils.SpeechRecognizerManager
 import kotlinx.coroutines.Dispatchers
@@ -117,6 +118,39 @@ class MainActivity : ComponentActivity() {
     
     companion object {
         private const val OVERLAY_PERMISSION_REQUEST_CODE = 1001
+    }
+
+    private fun initializeKws() {
+        try {
+            // 创建KwsManager
+            lifecycleScope.launch(Dispatchers.IO) {
+                SherpaKwsManager.initialize(this@MainActivity)
+                withContext(Dispatchers.Main) {
+                    if (SherpaKwsManager.modelState.value == SherpaKwsManager.ModelState.Ready) {
+                        // 启动SherpaKwsManager
+                        SherpaKwsManager.startListening(
+                            this@MainActivity,
+                            object : SherpaKwsManager.KeywordDetectionListener {
+
+                                override fun onKeywordDetected(keyword: String) {
+                                    Log.e("jbjb", "Keyword detected: $keyword")
+                                }
+
+                                override fun onError(
+                                    errorCode: Int,
+                                    errorMessage: String
+                                ) {
+                                    Log.e("jbjb", "Error in KwsManager: $errorCode, $errorMessage")
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e("jbjb", "Error initializing SherpaKwsManager: ${e.message}")
+        }
     }
 
     private fun initializeSpeechRecognizer() {

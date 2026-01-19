@@ -1,12 +1,14 @@
 package com.aotuman.baobaoai
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.TextUtils
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -94,15 +96,45 @@ class MainActivity : ComponentActivity() {
         }
     }
     
-    private fun startFloatingWindowService() {
-        val intent = Intent(this, FloatingWindowService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+    /**
+     * 检查AccessibilityService是否已启用
+     */
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val expectedComponentName = ComponentName(this, AutoGLMService::class.java)
+        val enabledServicesSetting = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        )
+        val colonSplitter = TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(enabledServicesSetting)
+        
+        while (colonSplitter.hasNext()) {
+            val componentNameString = colonSplitter.next()
+            val enabledComponentName = ComponentName.unflattenFromString(componentNameString)
+            if (enabledComponentName != null && enabledComponentName == expectedComponentName) {
+                return true
+            }
         }
-        Toast.makeText(this, "语音助手已启动", Toast.LENGTH_SHORT).show()
-        finish()
+        return false
+    }
+
+    /**
+     * 跳转到系统无障碍设置页面
+     */
+    private fun navigateToAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST_CODE)
+    }
+
+    private fun startFloatingWindowService() {
+        if (!isAccessibilityServiceEnabled()) {
+            // AccessibilityService未启用，引导用户到设置页面
+            Toast.makeText(this, "请在无障碍设置中启用BaoBao AI语音助手", Toast.LENGTH_LONG).show()
+            navigateToAccessibilitySettings()
+        } else {
+            // AccessibilityService已启用，启动服务
+            Toast.makeText(this, "语音助手已启动", Toast.LENGTH_SHORT).show()
+        }
     }
     
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -113,11 +145,20 @@ class MainActivity : ComponentActivity() {
             } else {
                 Toast.makeText(this, "需要悬浮窗权限才能使用语音助手", Toast.LENGTH_SHORT).show()
             }
+        } else if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST_CODE) {
+            // 从无障碍设置返回，检查是否已启用
+            if (isAccessibilityServiceEnabled()) {
+                Toast.makeText(this, "语音助手已启动", Toast.LENGTH_SHORT).show()
+            } else {
+                // 未启用，提示用户
+                Toast.makeText(this, "未启用无障碍服务，语音助手无法正常工作", Toast.LENGTH_LONG).show()
+            }
         }
     }
     
     companion object {
         private const val OVERLAY_PERMISSION_REQUEST_CODE = 1001
+        private const val ACCESSIBILITY_PERMISSION_REQUEST_CODE = 1002
     }
 
     private fun initializeKws() {

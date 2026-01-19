@@ -182,10 +182,11 @@ class AutoGLMService : AccessibilityService() {
                         _floatingWindowController?.setListening(false)
 
 
+                        var voiceResultText = result
                         // 执行核心功能：获取截图->发送给模型->解析响应->执行操作指令
                         serviceScope.launch(Dispatchers.IO) {
                             try{
-                               sendMessage(text = result)
+                               sendMessage(text = voiceResultText)
                             } catch (e: Exception) {
                                 Log.e("AutoGLMService", "Error processing request: ${e.message}", e)
                                 withContext(Dispatchers.Main) {

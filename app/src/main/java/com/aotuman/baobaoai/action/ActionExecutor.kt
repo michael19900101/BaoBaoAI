@@ -3,9 +3,18 @@ package com.aotuman.baobaoai.action
 import android.content.Intent
 import android.util.Log
 import com.aotuman.baobaoai.AutoGLMService
+import com.aotuman.baobaoai.utils.AppMatcher
 import kotlinx.coroutines.delay
 
 class ActionExecutor(private val service: AutoGLMService) {
+
+    private val textInputHandler = TextInputHandler(service)
+
+    fun setDebugListener(listener: ((android.graphics.Bitmap, String) -> Unit)?) {
+        if (listener != null) {
+            textInputHandler.setDebugListener(listener)
+        }
+    }
 
     suspend fun execute(action: Action): Boolean {
         return when (action) {
@@ -19,7 +28,7 @@ class ActionExecutor(private val service: AutoGLMService) {
                 Log.d("ActionExecutor", "Double Tapping ${action.x}, ${action.y}")
                 // Execute two taps with a short delay
                 val success1 = service.performTap(action.x.toFloat(), action.y.toFloat())
-                delay(150) 
+                delay(150)
                 val success2 = service.performTap(action.x.toFloat(), action.y.toFloat())
                 delay(1000)
                 success1 && success2
@@ -41,28 +50,34 @@ class ActionExecutor(private val service: AutoGLMService) {
             }
             is Action.Type -> {
                 Log.d("ActionExecutor", "Typing ${action.text}")
-                // 简化处理：暂时不支持自动输入文本，因为TextInputHandler不存在
-                // 可以在后续实现中添加此功能
-                true
+                textInputHandler.inputText(action.text)
             }
             is Action.Launch -> {
                 Log.d("ActionExecutor", "Launching ${action.appName}")
-                // 简化处理：直接将应用名称作为包名尝试启动
-                try {
-                    val intent = service.packageManager.getLaunchIntentForPackage(action.appName)
+                // Need a map of App Name -> Package Name. For now, just try generic intent or implement a mapper.
+                // Simplified: Assume appName IS packageName for this MVP or implement a small mapper
+                // A real implementation needs the package mapper from the original project
+                val packageName = AppMatcher.getPackageName(action.appName)
+                if (packageName != null) {
+                    val intent = service.packageManager.getLaunchIntentForPackage(packageName)
                     if (intent != null) {
-                        Log.d("ActionExecutor", "Found intent for ${action.appName}, starting activity...")
+                        Log.d("ActionExecutor", "Found intent for $packageName, starting activity...")
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        service.startActivity(intent)
-                        Log.d("ActionExecutor", "Activity started successfully")
-                        delay(2000)
-                        true
+                        try {
+                            service.startActivity(intent)
+                            Log.d("ActionExecutor", "Activity started successfully")
+                            delay(2000)
+                            true
+                        } catch (e: Exception) {
+                            Log.e("ActionExecutor", "Failed to start activity: ${e.message}")
+                            false
+                        }
                     } else {
-                        Log.e("ActionExecutor", "Launch intent is null for ${action.appName}")
+                        Log.e("ActionExecutor", "Launch intent is null for $packageName")
                         false
                     }
-                } catch (e: Exception) {
-                    Log.e("ActionExecutor", "Failed to start activity: ${e.message}")
+                } else {
+                    Log.e("ActionExecutor", "Unknown app: ${action.appName} (mapped to null)")
                     false
                 }
             }

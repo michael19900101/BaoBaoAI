@@ -58,6 +58,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+//        val intent = this.packageManager.getLaunchIntentForPackage("美团")
+//        if (intent != null) {
+//            this.startActivity(intent)
+//        }
         setContent {
             BaoBaoAITheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) {

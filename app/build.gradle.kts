@@ -32,7 +32,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("Boolean", "AUTO_INPUT_DEV_MODE", "false")
+        }
         release {
+            buildConfigField("Boolean", "AUTO_INPUT_DEV_MODE", "false")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

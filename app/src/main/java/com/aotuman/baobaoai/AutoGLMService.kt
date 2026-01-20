@@ -40,6 +40,7 @@ import androidx.lifecycle.viewModelScope
 import com.aotuman.baobaoai.action.Action
 import com.aotuman.baobaoai.action.ActionDescriber
 import com.aotuman.baobaoai.data.TaskEndState
+import com.aotuman.baobaoai.data.ImageStorage
 import com.aotuman.baobaoai.utils.AppMapper
 import com.aotuman.baobaoai.utils.AppStateTracker
 import com.sidhu.autoinput.GestureAnimator
@@ -96,6 +97,9 @@ class AutoGLMService : AccessibilityService() {
 
     // Conversation history for the API
     private val apiHistory = mutableListOf<Message>()
+
+    // Image storage for saving screenshots
+    private val imageStorage by lazy { ImageStorage(this) }
 
     // Dynamic accessor for ActionExecutor
     private val actionExecutor: ActionExecutor?
@@ -786,6 +790,14 @@ class AutoGLMService : AccessibilityService() {
                     // Add Assistant response to history
                     apiHistory.add(Message("assistant", buildAssistantContent(thinking, actionStr)))
 
+                    // Save screenshot if available
+                    val screenshotPath = if (screenshot != null) {
+                        imageStorage.saveImage(screenshot)
+                    } else {
+                        null
+                    }
+                    Log.d("AutoGLM_Debug", "Saved screenshot to $screenshotPath")
+                    
                     // Save assistant message to database with screenshot
 
 

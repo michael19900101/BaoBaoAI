@@ -58,10 +58,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-//        val intent = this.packageManager.getLaunchIntentForPackage("美团")
-//        if (intent != null) {
-//            this.startActivity(intent)
-//        }
         setContent {
             BaoBaoAITheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) {
@@ -96,7 +92,7 @@ class MainActivity : ComponentActivity() {
             )
             startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE)
         } else {
-            startFloatingWindowService()
+            startAutoGLMService()
         }
     }
     
@@ -130,7 +126,7 @@ class MainActivity : ComponentActivity() {
         startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST_CODE)
     }
 
-    private fun startFloatingWindowService() {
+    private fun startAutoGLMService() {
         if (!isAccessibilityServiceEnabled()) {
             // AccessibilityService未启用，引导用户到设置页面
             Toast.makeText(this, "请在无障碍设置中启用BaoBao AI语音助手", Toast.LENGTH_LONG).show()
@@ -145,7 +141,7 @@ class MainActivity : ComponentActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                startFloatingWindowService()
+                startAutoGLMService()
             } else {
                 Toast.makeText(this, "需要悬浮窗权限才能使用语音助手", Toast.LENGTH_SHORT).show()
             }
@@ -157,6 +153,15 @@ class MainActivity : ComponentActivity() {
                 // 未启用，提示用户
                 Toast.makeText(this, "未启用无障碍服务，语音助手无法正常工作", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        val service = AutoGLMService.getInstance()
+        service?.stopTask()
+        lifecycleScope.launch {
+            service?.floatingWindowController?.forceDismiss()
         }
     }
     

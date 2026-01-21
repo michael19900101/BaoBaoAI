@@ -31,7 +31,13 @@ object SherpaModelManager {
         data class Error(val message: String) : ModelState()
     }
 
-    // Initialize the model. 
+     /*
+     Please see
+     https://k2-fsa.github.io/sherpa/onnx/sense-voice/index.html
+     for a list of pre-trained models.
+     */
+
+    // Initialize the model.
     // Assumes model files are in assets/sherpa-model/
     // Required files for SenseVoice: model.onnx, tokens.txt
     suspend fun initModel(context: Context) {

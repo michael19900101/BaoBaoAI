@@ -71,6 +71,9 @@ object SherpaKwsManager {
     @Volatile
     private var isRecording = false
 
+    // Please See
+    // https://k2-fsa.github.io/sherpa/onnx/kws/pretrained_models/index.html
+    // for a list of available models
     /**
      * 初始化KWS模型
      * @param context 上下文

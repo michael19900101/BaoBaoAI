@@ -85,14 +85,14 @@ object SherpaKwsManager {
 
         withContext(Dispatchers.IO) {
             try {
-                val modelDir = File(context.filesDir, "sherpa-model")
+                val modelDir = File(context.filesDir, "sherpa-model/kws")
                 if (!modelDir.exists()) modelDir.mkdirs()
 
                 // 模型文件列表
                 val encoderName = "encoder-epoch-99-avg-1-chunk-16-left-64.onnx"
                 val decoderName = "decoder-epoch-99-avg-1-chunk-16-left-64.onnx"
                 val joinerName = "joiner-epoch-99-avg-1-chunk-16-left-64.onnx"
-                val tokensName = "kws_tokens.txt"
+                val tokensName = "tokens.txt"
                 val keywordsName = "keywords.txt"
 
                 // 复制所有必需的模型文件到内部存储
@@ -102,11 +102,11 @@ object SherpaKwsManager {
                 val tokensFile = File(modelDir, tokensName)
                 val keywordsFile = File(modelDir, keywordsName)
 
-                copyAsset(context, "sherpa-model/$encoderName", encoderFile)
-                copyAsset(context, "sherpa-model/$decoderName", decoderFile)
-                copyAsset(context, "sherpa-model/$joinerName", joinerFile)
-                copyAsset(context, "sherpa-model/$tokensName", tokensFile)
-                copyAsset(context, "sherpa-model/$keywordsName", keywordsFile)
+                copyAsset(context, "sherpa-model/kws/$encoderName", encoderFile)
+                copyAsset(context, "sherpa-model/kws/$decoderName", decoderFile)
+                copyAsset(context, "sherpa-model/kws/$joinerName", joinerFile)
+                copyAsset(context, "sherpa-model/kws/$tokensName", tokensFile)
+                copyAsset(context, "sherpa-model/kws/$keywordsName", keywordsFile)
 
                 // 验证所有文件是否存在且有效
                 if (!encoderFile.exists() || !decoderFile.exists() || !joinerFile.exists() || 

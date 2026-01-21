@@ -44,18 +44,18 @@ object SherpaModelManager {
 
         withContext(Dispatchers.IO) {
             try {
-                val modelDir = File(context.filesDir, "sherpa-model")
+                val modelDir = File(context.filesDir, "sherpa-model/sense-voice")
                 if (!modelDir.exists()) modelDir.mkdirs()
 
-                val modelName = "model.onnx"
+                val modelName = "model.int8.onnx"
                 val tokensName = "tokens.txt"
                 
                 val modelFile = File(modelDir, modelName)
                 val tokensFile = File(modelDir, tokensName)
 
                 // Ensure files are copied and valid
-                copyAsset(context, "sherpa-model/$modelName", modelFile)
-                copyAsset(context, "sherpa-model/$tokensName", tokensFile)
+                copyAsset(context, "sherpa-model/sense-voice/$modelName", modelFile)
+                copyAsset(context, "sherpa-model/sense-voice/$tokensName", tokensFile)
 
                 if (!modelFile.exists() || !tokensFile.exists() || modelFile.length() == 0L || tokensFile.length() == 0L) {
                     _modelState.value = ModelState.Error("Model files missing or invalid in internal storage")

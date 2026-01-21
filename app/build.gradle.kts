@@ -1,3 +1,5 @@
+import java.io.FileOutputStream
+import java.net.URL
 import java.util.Properties
 
 plugins {
@@ -13,6 +15,64 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 val defaultApiKey = localProperties.getProperty("ZHIPU_API_KEY") ?: ""
+
+data class ModelInfo(
+    val url: String,
+    val relativePath: String // 相对于 baseOutputDir 的完整路径
+)
+
+tasks.register("downloadModels") {
+    val models = listOf(
+        ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/decoder-epoch-99-avg-1-chunk-16-left-64.onnx", "kws/decoder-epoch-99-avg-1-chunk-16-left-64.onnx"),
+        ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/encoder-epoch-99-avg-1-chunk-16-left-64.onnx", "kws/encoder-epoch-99-avg-1-chunk-16-left-64.onnx"),
+        ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/joiner-epoch-99-avg-1-chunk-16-left-64.onnx", "kws/joiner-epoch-99-avg-1-chunk-16-left-64.onnx"),
+        ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/model.int8.onnx", "sense-voice/model.int8.onnx"),
+    )
+    val baseOutputDir = project.file("src/main/assets/sherpa-model")
+
+    doLast {
+        if (!baseOutputDir.exists()) {
+            baseOutputDir.mkdirs()
+        }
+
+        models.forEach { model ->
+            val outputFile = File(baseOutputDir, model.relativePath)
+
+            // 确保父目录存在
+            outputFile.parentFile?.let { parentDir ->
+                if (!parentDir.exists()) {
+                    parentDir.mkdirs()
+                    println("Created directory: ${parentDir.absolutePath}")
+                }
+            }
+
+            if (!outputFile.exists()) {
+                println("Downloading ${model.relativePath} from ${model.url}...")
+                try {
+                    val url = URL(model.url)
+                    val connection = url.openConnection()
+                    connection.connect()
+                    connection.getInputStream().use { inputStream ->
+                        FileOutputStream(outputFile).use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    println("Download complete: ${outputFile.absolutePath}")
+                } catch (e: Exception) {
+                    println("Error downloading ${model.relativePath}: ${e.message}")
+                    throw e
+                }
+            } else {
+                println("${model.relativePath} already exists. Skipping download.")
+            }
+        }
+    }
+}
+
+// 让 downloadModels 任务在编译时自动执行
+tasks.preBuild {
+    dependsOn("downloadModels")
+}
 
 android {
     namespace = "com.aotuman.baobaoai"

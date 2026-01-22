@@ -34,6 +34,7 @@ import com.aotuman.baobaoai.utils.SherpaVadManager
 import com.aotuman.baobaoai.utils.SherpaKwsManager
 import com.aotuman.baobaoai.utils.SherpaModelManager
 import com.aotuman.baobaoai.utils.SpeechRecognizerManager
+import com.aotuman.baobaoai.utils.VoiceAssistantTest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -64,12 +65,12 @@ class MainActivity : ComponentActivity() {
             BaoBaoAITheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) {
                     MainScreen(
-                        onStartAssistant = { checkPermissions() },
-//                        onStartAssistant = {
-////                            initializeKws()
-////                            initializeSpeechRecognizer()
-////                            initializeAVD()
-//                                           },
+                        onStartAssistant = {
+//                            checkPermissions()
+                            // 启动完整的语音助手
+                            val voiceAssistantTest = VoiceAssistantTest()
+                            voiceAssistantTest.testVoiceAssistant(this)
+                                           },
                         modifier = Modifier.padding(it)
                     )
                 }

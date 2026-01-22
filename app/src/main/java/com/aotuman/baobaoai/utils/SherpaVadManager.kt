@@ -289,6 +289,7 @@ object SherpaVadManager {
                             val text = runSecondPass(segment.samples)
                             if (text.isNotBlank()) {
                                 Log.e(TAG, "runSecondPass Text: $text")
+                                onResult?.invoke(text)
                             }
                         }
 

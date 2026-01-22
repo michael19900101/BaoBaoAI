@@ -105,11 +105,11 @@ object SherpaKwsManager {
                 val tokensFile = File(modelDir, tokensName)
                 val keywordsFile = File(modelDir, keywordsName)
 
-                copyAsset(context, "sherpa-model/kws/$encoderName", encoderFile)
-                copyAsset(context, "sherpa-model/kws/$decoderName", decoderFile)
-                copyAsset(context, "sherpa-model/kws/$joinerName", joinerFile)
-                copyAsset(context, "sherpa-model/kws/$tokensName", tokensFile)
-                copyAsset(context, "sherpa-model/kws/$keywordsName", keywordsFile)
+                AssetUtil.copyAsset(context, "sherpa-model/kws/$encoderName", encoderFile)
+                AssetUtil.copyAsset(context, "sherpa-model/kws/$decoderName", decoderFile)
+                AssetUtil.copyAsset(context, "sherpa-model/kws/$joinerName", joinerFile)
+                AssetUtil.copyAsset(context, "sherpa-model/kws/$tokensName", tokensFile)
+                AssetUtil.copyAsset(context, "sherpa-model/kws/$keywordsName", keywordsFile)
 
                 // 验证所有文件是否存在且有效
                 if (!encoderFile.exists() || !decoderFile.exists() || !joinerFile.exists() || 
@@ -167,31 +167,6 @@ object SherpaKwsManager {
             } catch (e: Exception) {
                 Log.e(TAG, "KWS模型初始化失败", e)
                 _modelState.value = ModelState.Error(e.message ?: "Unknown error during initialization")
-            }
-        }
-    }
-
-    /**
-     * 复制assets中的文件到内部存储
-     */
-    private fun copyAsset(context: Context, assetPath: String, outFile: File) {
-        try {
-            // 检查文件是否存在且有内容
-            if (outFile.exists() && outFile.length() > 0) {
-                return
-            }
-
-            Log.d(TAG, "Copying asset $assetPath to ${outFile.absolutePath}")
-            context.assets.open(assetPath).use { input ->
-                FileOutputStream(outFile).use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, "Failed to copy asset: $assetPath", e)
-            // 删除可能的部分文件
-            if (outFile.exists()) {
-                outFile.delete()
             }
         }
     }

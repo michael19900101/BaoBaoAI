@@ -27,6 +27,7 @@ tasks.register("downloadModels") {
         ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/encoder-epoch-99-avg-1-chunk-16-left-64.onnx", "kws/encoder-epoch-99-avg-1-chunk-16-left-64.onnx"),
         ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/joiner-epoch-99-avg-1-chunk-16-left-64.onnx", "kws/joiner-epoch-99-avg-1-chunk-16-left-64.onnx"),
         ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/model.int8.onnx", "sense-voice/model.int8.onnx"),
+        ModelInfo("https://github.com/michael19900101/BaoBaoAI/releases/download/SherpaModel/silero_vad.onnx","vad/silero_vad.onnx")
     )
     val baseOutputDir = project.file("src/main/assets/sherpa-model")
 

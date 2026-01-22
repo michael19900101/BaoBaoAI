@@ -30,10 +30,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import com.aotuman.baobaoai.ui.theme.BaoBaoAITheme
+import com.aotuman.baobaoai.utils.SherpaVadManager
 import com.aotuman.baobaoai.utils.SherpaKwsManager
 import com.aotuman.baobaoai.utils.SherpaModelManager
 import com.aotuman.baobaoai.utils.SpeechRecognizerManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -63,6 +65,11 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) {
                     MainScreen(
                         onStartAssistant = { checkPermissions() },
+//                        onStartAssistant = {
+////                            initializeKws()
+////                            initializeSpeechRecognizer()
+////                            initializeAVD()
+//                                           },
                         modifier = Modifier.padding(it)
                     )
                 }
@@ -222,10 +229,27 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-
+                withContext(Dispatchers.IO) {
+                    delay(10000)
+                    speechRecognizerManager?.stopListening()
+                }
             }
         } catch (e: Exception) {
             Log.e("jbjb", "Error initializing speech recognizer: ${e.message}")
+        }
+    }
+
+    private fun initializeAVD() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            SherpaVadManager.initialize(this@MainActivity)
+            SherpaVadManager.startListening(
+                onResultCallback = { result ->
+                    Log.d("jbjb", "SherpaAVDManager result: $result")
+                },
+                onErrorCallback = { error ->
+                    Log.e("jbjb", "SherpaAVDManager error: $error")
+                },
+            )
         }
     }
 }

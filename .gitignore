@@ -45,3 +45,4 @@ app/src/main/assets/sherpa-model/kws/decoder-epoch-99-avg-1-chunk-16-left-64.onn
 app/src/main/assets/sherpa-model/kws/encoder-epoch-99-avg-1-chunk-16-left-64.onnx
 app/src/main/assets/sherpa-model/kws/joiner-epoch-99-avg-1-chunk-16-left-64.onnx
 app/src/main/assets/sherpa-model/sense-voice/model.int8.onnx
+app/src/main/assets/sherpa-model/vad/silero_vad.onnx

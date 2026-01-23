@@ -288,7 +288,7 @@ object SherpaVadManager {
                         CoroutineScope(Dispatchers.IO).launch {
                             val text = runSecondPass(segment.samples)
                             if (text.isNotBlank()) {
-                                Log.e(TAG, "runSecondPass Text: $text")
+//                                Log.e(TAG, "runSecondPass Text: $text")
                                 onResult?.invoke(text)
                             }
                         }
@@ -297,7 +297,7 @@ object SherpaVadManager {
                     }
 
                     val isSpeechDetected = vad.isSpeechDetected()
-                    Log.e(TAG, "isSpeechDetected: $isSpeechDetected")
+//                    Log.e(TAG, "isSpeechDetected: $isSpeechDetected")
                 }
             }
         }

@@ -249,19 +249,19 @@ object SherpaStreamingManager {
         }
     }
 
-    suspend fun stopListening() {
+    fun stopListening() {
         if (!_isListening.value) return
 
         _isListening.value = false
 
         try {
             recordingJob?.cancel()
-            recordingJob?.join() // Wait for loop to finish
-
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
-
+            scope.launch {
+                recordingJob?.join() // Wait for loop to finish
+                audioRecord?.stop()
+                audioRecord?.release()
+                audioRecord = null
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

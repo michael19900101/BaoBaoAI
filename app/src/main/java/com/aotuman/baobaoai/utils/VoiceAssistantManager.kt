@@ -3,18 +3,13 @@ package com.aotuman.baobaoai.utils
 import android.content.Context
 import android.util.Log
 import com.aotuman.baobaoai.MyApplication
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 object VoiceAssistantManager {
     private const val TAG = "VoiceAssistantManager"
-    private const val SILENCE_TIMEOUT_MS = 10000 // 10秒无语音输入超时
     
     // 助手状态
     sealed class AssistantState {
@@ -32,9 +27,7 @@ object VoiceAssistantManager {
     private var onCommand: ((String) -> Unit)? = null
     private var onSleep: (() -> Unit)? = null
     private var onError: ((String) -> Unit)? = null
-    
-    // 超时定时器
-    private var silenceTimerJob: Job? = null
+
     
     // 初始化
     suspend fun initialize(context: Context) {
@@ -42,11 +35,8 @@ object VoiceAssistantManager {
             // 初始化KWS模型
             SherpaKwsManager.initialize(context)
             
-            // 初始化VAD模型+ASR模型
-            SherpaVadManager.initialize(context)
-            
             // 初始化ASR模型
-//            SherpaModelManager.initialize(context)
+            SherpaStreamingManager.initialize(context)
         }
     }
     
@@ -71,10 +61,7 @@ object VoiceAssistantManager {
     suspend fun stopAssistant() {
         // 停止所有监听
         SherpaKwsManager.stopListening()
-        SherpaVadManager.stopListening()
-        
-        // 取消定时器
-        silenceTimerJob?.cancel()
+        SherpaStreamingManager.stopListening()
         
         // 重置状态
         _state.value = AssistantState.Sleeping
@@ -113,33 +100,28 @@ object VoiceAssistantManager {
         // 停止关键词监听
         SherpaKwsManager.stopListening()
         
-        // 开始VAD+ASR监听
-        startVadAsrListening(context)
-        
-        // 启动10秒无语音输入定时器
-        startSilenceTimer()
+        // 开始ASR监听
+        startAsrListening(context)
     }
     
-    // 开始VAD+ASR监听
-    private fun startVadAsrListening(context: Context) {
-        Log.i(TAG, "开始VAD+ASR监听")
-        
-        SherpaVadManager.startListening(
-            onResultCallback = { text ->
-                if (text.isNotBlank()) {
+    // 开始ASR监听
+    private fun startAsrListening(context: Context) {
+        Log.i(TAG, "开始ASR监听")
+
+        SherpaStreamingManager.startListening(context, object : SherpaStreamingManager.StreamingDetectionListener {
+            override fun onDetected(isEndpoint: Boolean, text: String) {
+                if (isEndpoint) {
                     Log.i(TAG, "识别结果: $text")
-                    // 重置静音定时器
-                    resetSilenceTimer()
-                    
-                    // 处理命令
                     processCommand(text)
+                    sleep()
                 }
-            },
-            onErrorCallback = { error ->
-                Log.e(TAG, "VAD+ASR错误: $error")
-                onError?.invoke("语音监听错误: $error")
             }
-        )
+
+            override fun onError(errorCode: Int, errorMessage: String) {
+                onError?.invoke("语音监听错误: $errorMessage")
+            }
+
+        })
     }
     
     // 处理命令
@@ -154,32 +136,12 @@ object VoiceAssistantManager {
         _state.value = AssistantState.Listening
     }
     
-    // 开始静音定时器
-    private fun startSilenceTimer() {
-        silenceTimerJob = CoroutineScope(Dispatchers.IO).launch {
-            delay(SILENCE_TIMEOUT_MS.toLong())
-            withContext(Dispatchers.Main) {
-                // 超时，进入休眠
-                sleep()
-            }
-        }
-    }
-    
-    // 重置静音定时器
-    private fun resetSilenceTimer() {
-        silenceTimerJob?.cancel()
-        startSilenceTimer()
-    }
-    
     // 休眠
-    private suspend fun sleep() {
+    private fun sleep() {
         Log.i(TAG, "语音助手休眠")
         
-        // 停止VAD+ASR监听
-        SherpaVadManager.stopListening()
-        
-        // 取消定时器
-        silenceTimerJob?.cancel()
+        // 停止ASR监听
+        SherpaStreamingManager.stopListening()
         
         // 重置状态
         _state.value = AssistantState.Sleeping
@@ -190,10 +152,5 @@ object VoiceAssistantManager {
         // 重新开始关键词监听
         val context = MyApplication.instance
         startKwsListening(context)
-    }
-    
-    // 手动休眠
-    suspend fun manualSleep() {
-        sleep()
     }
 }

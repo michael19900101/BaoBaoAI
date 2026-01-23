@@ -69,9 +69,9 @@ class MainActivity : ComponentActivity() {
                         onStartAssistant = {
 //                            checkPermissions()
                             // 启动完整的语音助手
-//                            val voiceAssistantTest = VoiceAssistantTest()
-//                            voiceAssistantTest.testVoiceAssistant(this)
-                            initialStreaming()
+                            val voiceAssistantTest = VoiceAssistantTest()
+                            voiceAssistantTest.testVoiceAssistant(this)
+//                            initialStreaming()
                                            },
                         modifier = Modifier.padding(it)
                     )

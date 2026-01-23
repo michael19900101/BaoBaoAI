@@ -33,6 +33,7 @@ import com.aotuman.baobaoai.ui.theme.BaoBaoAITheme
 import com.aotuman.baobaoai.utils.SherpaVadManager
 import com.aotuman.baobaoai.utils.SherpaKwsManager
 import com.aotuman.baobaoai.utils.SherpaModelManager
+import com.aotuman.baobaoai.utils.SherpaStreamingManager
 import com.aotuman.baobaoai.utils.SpeechRecognizerManager
 import com.aotuman.baobaoai.utils.VoiceAssistantTest
 import kotlinx.coroutines.Dispatchers
@@ -68,8 +69,9 @@ class MainActivity : ComponentActivity() {
                         onStartAssistant = {
 //                            checkPermissions()
                             // 启动完整的语音助手
-                            val voiceAssistantTest = VoiceAssistantTest()
-                            voiceAssistantTest.testVoiceAssistant(this)
+//                            val voiceAssistantTest = VoiceAssistantTest()
+//                            voiceAssistantTest.testVoiceAssistant(this)
+                            initialStreaming()
                                            },
                         modifier = Modifier.padding(it)
                     )
@@ -176,6 +178,27 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val OVERLAY_PERMISSION_REQUEST_CODE = 1001
         private const val ACCESSIBILITY_PERMISSION_REQUEST_CODE = 1002
+    }
+
+    private fun initialStreaming() {
+        try {
+            // 创建StreamingManager
+            lifecycleScope.launch(Dispatchers.IO) {
+                SherpaStreamingManager.initialize(this@MainActivity)
+                SherpaStreamingManager.startListening(this@MainActivity, object : SherpaStreamingManager.StreamingDetectionListener {
+                    override fun onDetected(isEndpoint: Boolean, text: String) {
+                        Log.e("SherpaStreamingManager", "isEndpoint: $isEndpoint, onDetected: $text")
+                    }
+
+                    override fun onError(errorCode: Int, errorMessage: String) {
+                        Log.e("SherpaStreamingManager", "onError: $errorCode, $errorMessage")
+                    }
+
+                })
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun initializeKws() {

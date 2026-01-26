@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.aotuman.baobaoai.AutoGLMService
 import com.aotuman.baobaoai.BuildConfig
+import com.aotuman.baobaoai.ui.AssistantState
 import com.sidhu.autoinput.KeyboardAgent
 import com.sidhu.autoinput.KeyboardScanner
 import kotlinx.coroutines.delay
@@ -358,8 +359,11 @@ class TextInputHandler(private val service: AutoGLMService) {
         if (screenshot == null) {
             Log.e(TAG, "Screenshot failed, cannot perform Visual Input")
             Log.e("VisualInputTest", "Screenshot was NULL.")
-            service.updateFloatingStatus(VISUAL_INPUT_FAILED_STATUS)
-            service.floatingWindowController?.setTaskRunning(false)
+            service.updateFloatingStatus(
+                VISUAL_INPUT_FAILED_STATUS,
+                AssistantState.Error(VISUAL_INPUT_FAILED_STATUS)
+            )
+            service.floatingWindowController?.setTaskRunning(false, AssistantState.Idle)
             return false
         }
 
@@ -382,8 +386,11 @@ class TextInputHandler(private val service: AutoGLMService) {
 
         Log.w(TAG, "Keyboard Agent failed")
         Log.d("VisualInputTest", "KeyboardAgent.type returned FALSE. Visual Input Failed.")
-        service.updateFloatingStatus(VISUAL_INPUT_FAILED_STATUS)
-        service.floatingWindowController?.setTaskRunning(false)
+        service.updateFloatingStatus(
+            VISUAL_INPUT_FAILED_STATUS,
+            AssistantState.Error(VISUAL_INPUT_FAILED_STATUS)
+        )
+        service.floatingWindowController?.setTaskRunning(false, AssistantState.Idle)
         return false
     }
 }

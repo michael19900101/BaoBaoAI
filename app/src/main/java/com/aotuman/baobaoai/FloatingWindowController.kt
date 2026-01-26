@@ -3,7 +3,6 @@ package com.aotuman.baobaoai
 import android.content.Context
 import android.util.Log
 import android.view.Choreographer
-import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,12 +13,9 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,12 +29,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import android.os.Handler
 import android.os.Looper
-import kotlin.math.roundToInt
-import kotlin.coroutines.resume
+import com.aotuman.baobaoai.ui.AssistantState
+import com.aotuman.baobaoai.ui.FloatingWindowAndBall
 
 import com.aotuman.baobaoai.utils.DisplayUtils
-import com.aotuman.baobaoai.utils.WindowUtils
-import com.aotuman.baobaoai.ui.FloatingWindowUI
 
 /**
  * Sealed class hierarchy representing the floating window state machine.
@@ -65,7 +59,8 @@ sealed class FloatingWindowState {
     data class Visible(
         val statusText: String,
         val isTaskRunning: Boolean = true,
-        val onStopCallback: (() -> Unit)? = null
+        val onStopCallback: (() -> Unit)? = null,
+        val assistantState: AssistantState,
     ) : FloatingWindowState()
 
     /** Task has completed naturally (not user cancelled) */
@@ -146,10 +141,6 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
     private val _stateFlow = MutableStateFlow<FloatingWindowState>(FloatingWindowState.Hidden)
     /** Public read-only state flow for observing floating window state changes */
     val stateFlow: StateFlow<FloatingWindowState> = _stateFlow.asStateFlow()
-    
-    // 回调
-    private var onStartListeningCallback: (() -> Unit)? = null
-    private var onStopListeningCallback: (() -> Unit)? = null
 
     /**
      * Validates if a state transition is allowed.
@@ -271,7 +262,11 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
             }
 
             // Now transition to Visible state with task running
-            setState(FloatingWindowState.Visible(defaultStatus, true, preservedOnStopCallback))
+            setState(FloatingWindowState.Visible(
+                defaultStatus,
+                true,
+                preservedOnStopCallback,
+                AssistantState.Listening()))
         }
     }
 
@@ -423,16 +418,20 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                     ) {
                         val isListening by _isListening.collectAsState()
                         val speechText by _speechText.collectAsState()
-                        FloatingWindowUI(
-                            speechText = speechText,
-                            isListening = isListening,
-                            onToggleExpand = { /* 展开/折叠窗口 */ },
-                            onStartListening = { 
-                                onStartListeningCallback?.invoke()
-                            },
-                            onStopListening = { 
-                                onStopListeningCallback?.invoke()
-                            }
+//                        FloatingWindowUI(
+//                            speechText = speechText,
+//                            isListening = isListening,
+//                            onToggleExpand = { /* 展开/折叠窗口 */ },
+//                            onStartListening = {
+//                                onStartListeningCallback?.invoke()
+//                            },
+//                            onStopListening = {
+//                                onStopListeningCallback?.invoke()
+//                            }
+//                        )
+                        FloatingWindowAndBall(
+                            state = newState.assistantState,
+                            onStateChange = { }
                         )
                     }
 
@@ -531,22 +530,17 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
      */
     suspend fun showAndWaitForLayout(
         onStop: () -> Unit,
-        isRunning: Boolean = true,
-        onStartListening: (() -> Unit)? = null,
-        onStopListening: (() -> Unit)? = null
+        isRunning: Boolean = true
     ) {
         val currentState = _stateFlow.value
-        
-        // 保存语音识别回调
-        this.onStartListeningCallback = onStartListening
-        this.onStopListeningCallback = onStopListening
 
         if (currentState is FloatingWindowState.Visible) {
             // Already showing - update using unified method
             updateVisibleState(
                 isTaskRunning = isRunning,
                 onStopCallback = onStop,
-                reason = "showAndWait"
+                reason = "showAndWait",
+                assistantState = currentState.assistantState
             )
             // Already visible, no need to wait for layout
             return
@@ -555,7 +549,11 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         // Transition to Visible state and wait for layout
         val defaultStatus = "准备就绪"
         val layoutComplete = CompletableDeferred<Unit>()
-        setState(FloatingWindowState.Visible(defaultStatus, isRunning, onStop)) {
+        setState(FloatingWindowState.Visible(
+            defaultStatus,
+            isRunning,
+            onStop,
+            AssistantState.Idle)) {
             layoutComplete.complete(Unit)
         }
         layoutComplete.await()
@@ -576,7 +574,8 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         statusText: String? = null,
         isTaskRunning: Boolean? = null,
         onStopCallback: (() -> Unit)? = null,
-        reason: String
+        reason: String,
+        assistantState: AssistantState
     ) {
         val currentState = _stateFlow.value
 
@@ -598,20 +597,21 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         val newState = FloatingWindowState.Visible(
             statusText = newStatusText,
             isTaskRunning = newIsTaskRunning,
-            onStopCallback = newCallback
+            onStopCallback = newCallback,
+            assistantState = assistantState
         )
         setState(newState)
     }
 
-    fun updateStatus(status: String) {
+    fun updateStatus(status: String, assistantState: AssistantState) {
         controllerScope.launch {
-            updateVisibleState(statusText = status, reason = "updateStatus")
+            updateVisibleState(statusText = status, reason = "updateStatus", assistantState = assistantState)
         }
     }
 
-    fun setTaskRunning(running: Boolean) {
+    fun setTaskRunning(running: Boolean, assistantState: AssistantState) {
         controllerScope.launch {
-            updateVisibleState(isTaskRunning = running, reason = "setTaskRunning")
+            updateVisibleState(isTaskRunning = running, reason = "setTaskRunning", assistantState = assistantState)
         }
     }
     
@@ -668,7 +668,8 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                     FloatingWindowState.Visible(
                         statusText = currentState.cachedStatusText,
                         isTaskRunning = currentState.cachedIsTaskRunning,
-                        onStopCallback = currentState.cachedOnStopCallback
+                        onStopCallback = currentState.cachedOnStopCallback,
+                        assistantState = AssistantState.Idle
                     ),
                     onComplete
                 )
@@ -816,10 +817,5 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
 
     override val savedStateRegistry: SavedStateRegistry
         get() = savedStateRegistryController.savedStateRegistry
-        
-    // 扩展功能：切换窗口展开状态
-    private fun toggleExpand() {
-        // 实现窗口展开/折叠逻辑
-        // 这需要与UI组件配合，因此可能需要进一步调整
-    }
+
 }

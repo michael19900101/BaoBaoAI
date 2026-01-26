@@ -2,59 +2,51 @@ package com.aotuman.baobaoai
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
-import android.app.Application
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
 import android.graphics.Rect
 import android.util.Log
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
-
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
-
-import com.aotuman.baobaoai.action.ActionExecutor
-import com.aotuman.baobaoai.action.ActionParser
-import com.aotuman.baobaoai.network.ContentItem
-import com.aotuman.baobaoai.network.ImageUrl
-import com.aotuman.baobaoai.network.ModelClient
-import com.aotuman.baobaoai.network.Message
-import com.aotuman.baobaoai.utils.DisplayUtils
-import com.aotuman.baobaoai.utils.SherpaModelManager
-import com.aotuman.baobaoai.utils.SpeechRecognizerManager
-import android.view.WindowManager
-import android.content.pm.PackageManager
-import android.os.Build
-import android.provider.Settings
-import androidx.lifecycle.viewModelScope
 import com.aotuman.baobaoai.action.Action
 import com.aotuman.baobaoai.action.ActionDescriber
-import com.aotuman.baobaoai.data.TaskEndState
+import com.aotuman.baobaoai.action.ActionExecutor
+import com.aotuman.baobaoai.action.ActionParser
 import com.aotuman.baobaoai.data.ImageStorage
+import com.aotuman.baobaoai.data.TaskEndState
+import com.aotuman.baobaoai.network.ContentItem
+import com.aotuman.baobaoai.network.ImageUrl
+import com.aotuman.baobaoai.network.Message
+import com.aotuman.baobaoai.network.ModelClient
+import com.aotuman.baobaoai.ui.AssistantState
 import com.aotuman.baobaoai.utils.AppMapper
 import com.aotuman.baobaoai.utils.AppStateTracker
+import com.aotuman.baobaoai.utils.DisplayUtils
+import com.aotuman.baobaoai.utils.VoiceAssistantManager
 import com.sidhu.autoinput.GestureAnimator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.collections.orEmpty
-import kotlin.collections.plus
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 class AutoGLMService : AccessibilityService() {
 
     companion object {
+        private const val TAG = "AutoGLMService"
         private val _serviceInstance = MutableStateFlow<AutoGLMService?>(null)
         val serviceInstance = _serviceInstance.asStateFlow()
         
@@ -71,12 +63,10 @@ class AutoGLMService : AccessibilityService() {
 
     /** Animation controller for gesture visual feedback */
     private var _animationController: AnimationController? = null
-    
-    // 语音识别相关
-    private var speechRecognizerManager: SpeechRecognizerManager? = null
+
     private var speechText = ""
     private var isListening = false
-    
+
     // ModelClient instance for API calls
     private var modelClient: ModelClient? = null
 
@@ -105,26 +95,6 @@ class AutoGLMService : AccessibilityService() {
     private val actionExecutor: ActionExecutor?
         get() = AutoGLMService.getInstance()?.let { ActionExecutor(it) }
 
-    private fun initializeSpeechRecognizer() {
-        try {
-            // 初始化模型
-            serviceScope.launch(Dispatchers.IO) {
-                SherpaModelManager.initModel(this@AutoGLMService)
-                
-                // 模型初始化成功后，创建SpeechRecognizerManager
-                withContext(Dispatchers.Main) {
-                    speechRecognizerManager = SpeechRecognizerManager(this@AutoGLMService)
-                    _floatingWindowController?.updateStatus("语音识别就绪")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("AutoGLMService", "Error initializing speech recognizer: ${e.message}")
-            speechText = "语音识别初始化失败"
-            _floatingWindowController?.updateStatus("语音识别初始化失败")
-            speechRecognizerManager = null
-        }
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d("AutoGLMService", "Service connected")
@@ -134,7 +104,7 @@ class AutoGLMService : AccessibilityService() {
         // Initialize controllers
         _floatingWindowController = FloatingWindowController(this)
         _animationController = AnimationController(this)
-        
+
         // 初始化ModelClient
         modelClient = ModelClient(
             baseUrl = "https://open.bigmodel.cn/api/paas/v4",
@@ -142,100 +112,80 @@ class AutoGLMService : AccessibilityService() {
             modelName = "autoglm-phone"
         )
         
-        // 初始化语音识别管理器
-        initializeSpeechRecognizer()
-        
         // 启动悬浮窗
         serviceScope.launch {
             _floatingWindowController?.showAndWaitForLayout(
-                onStop = { /* 处理停止按钮点击 */ },
-                isRunning = true,
-                onStartListening = { startListening() },
-                onStopListening = { stopListening() }
+                onStop = { stopListening() },
+                isRunning = true
             )
         }
+
+        startAssistant()
     }
 
-    private fun startListening() {
-        if (!isListening && speechRecognizerManager != null) {
-            try {
-                // 检查权限
-                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    Log.e("AutoGLMService", "RECORD_AUDIO permission not granted")
-                    isListening = false
-                    speechText = "录音权限未授予"
-                    _floatingWindowController?.updateStatus("录音权限未授予")
-                    _floatingWindowController?.setTaskRunning(false)
+    private fun startAssistant() {
+        serviceScope.launch {
+            // 开始语音助手
+            VoiceAssistantManager.startAssistant(
+                context = this@AutoGLMService,
+                onWakeUpCallback = {
+                    Log.i(TAG, "=== 语音助手唤醒 ===")
+                    // 这里可以添加唤醒后的UI反馈
+                    _floatingWindowController?.updateStatus("正在聆听...", AssistantState.Listening("正在聆听..."))
+                    _floatingWindowController?.setTaskRunning(true, AssistantState.Listening("正在聆听..."))
+                    _floatingWindowController?.setListening(true)
+                },
+                onCommandCallback = { result ->
+                    Log.i(TAG, "=== 接收到命令: $result ===")
+                    // 这里可以添加命令处理逻辑
+                    _floatingWindowController?.updateStatus("正在处理请求...", AssistantState.Processing("正在处理请求..."))
+                    _floatingWindowController?.updateSpeechText(result)
+                    _floatingWindowController?.setTaskRunning(true, AssistantState.Processing("正在处理请求..."))
                     _floatingWindowController?.setListening(false)
-                    return
+
+
+//                    var voiceResultText = result
+//                    // 执行核心功能：获取截图->发送给模型->解析响应->执行操作指令
+//                    serviceScope.launch(Dispatchers.IO) {
+//                        try{
+//                            sendMessage(text = voiceResultText)
+//                        } catch (e: Exception) {
+//                            Log.e("AutoGLMService", "Error processing request: ${e.message}", e)
+//                            withContext(Dispatchers.Main) {
+//                                _floatingWindowController?.updateStatus("处理请求时出错: ${e.message}", AssistantState.Error("处理请求时出错: ${e.message}"))
+//                            }
+//                        } finally {
+//                            withContext(Dispatchers.Main) {
+//                                _floatingWindowController?.setTaskRunning(false, AssistantState.Idle)
+//                            }
+//                        }
+//                    }
+                },
+                onSleepCallback = {
+                    Log.i(TAG, "=== 语音助手休眠 ===")
+                    // 这里可以添加休眠后的UI反馈
+                },
+                onErrorCallback = {
+                    Log.e(TAG, "=== 语音助手错误: $it ===")
+                    // 这里可以添加错误处理逻辑
+                    speechText = "识别失败，请重试"
+                    isListening = false
+                    _floatingWindowController?.updateStatus("识别失败，请重试", AssistantState.Error("识别失败，请重试"))
+                    _floatingWindowController?.setTaskRunning(false, AssistantState.Error("识别失败，请重试"))
+                    _floatingWindowController?.setListening(false)
                 }
-                
-                isListening = true
-                speechText = "正在聆听..."
-                _floatingWindowController?.updateStatus("正在聆听...")
-                _floatingWindowController?.setTaskRunning(true)
-                _floatingWindowController?.setListening(true)
+            )
 
-                speechRecognizerManager?.startListening(
-                    onResultCallback = { result ->
-                        speechText = result
-                        isListening = false
-                        _floatingWindowController?.updateStatus("正在处理请求...")
-                        _floatingWindowController?.updateSpeechText(result)
-                        _floatingWindowController?.setTaskRunning(true)
-                        _floatingWindowController?.setListening(false)
-
-
-                        var voiceResultText = result
-                        // 执行核心功能：获取截图->发送给模型->解析响应->执行操作指令
-                        serviceScope.launch(Dispatchers.IO) {
-                            try{
-                               sendMessage(text = voiceResultText)
-                            } catch (e: Exception) {
-                                Log.e("AutoGLMService", "Error processing request: ${e.message}", e)
-                                withContext(Dispatchers.Main) {
-                                    _floatingWindowController?.updateStatus("处理请求时出错: ${e.message}")
-                                }
-                            } finally {
-                                withContext(Dispatchers.Main) {
-                                    _floatingWindowController?.setTaskRunning(false)
-                                }
-                            }
-                        }
-                    },
-                    onErrorCallback = { error ->
-                        Log.e("AutoGLMService", "Speech recognition error: $error")
-                        speechText = "识别失败，请重试"
-                        isListening = false
-                        _floatingWindowController?.updateStatus("识别失败，请重试")
-                        _floatingWindowController?.setTaskRunning(false)
-                        _floatingWindowController?.setListening(false)
-                    }
-                )
-            } catch (e: Exception) {
-                Log.e("AutoGLMService", "Error starting speech recognition: ${e.message}")
-                isListening = false
-                speechText = "开始录音失败"
-                _floatingWindowController?.updateStatus("开始录音失败")
-                _floatingWindowController?.setTaskRunning(false)
-                _floatingWindowController?.setListening(false)
-            }
-        } else {
-            Log.e("AutoGLMService", "Speech recognition is not available or already listening")
+            Log.i(TAG, "语音助手启动成功")
+            Log.i(TAG, "请说 '你好,包包' 来唤醒语音助手")
+            Log.i(TAG, "唤醒后请说出您的命令")
         }
     }
 
     private fun stopListening() {
-        if (isListening && speechRecognizerManager != null) {
-            serviceScope.launch(Dispatchers.IO) {
-                speechRecognizerManager?.stopListening()
-                withContext(Dispatchers.Main) {
-                    isListening = false
-                    _floatingWindowController?.setTaskRunning(false)
-                    _floatingWindowController?.setListening(false)
-                }
-            }
-        }
+        isListening = false
+        _floatingWindowController?.setTaskRunning(false, AssistantState.Idle)
+        _floatingWindowController?.setListening(false)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -243,6 +193,7 @@ class AutoGLMService : AccessibilityService() {
         _floatingWindowController = null
         _animationController = null
         _serviceInstance.value = null
+        stopListening()
         return super.onUnbind(intent)
     }
     
@@ -297,9 +248,9 @@ class AutoGLMService : AccessibilityService() {
         }
     }
 
-    fun updateFloatingStatus(text: String) {
+    fun updateFloatingStatus(text: String, assistantState: AssistantState) {
         serviceScope.launch {
-            _floatingWindowController?.updateStatus(text)
+            _floatingWindowController?.updateStatus(text, assistantState)
         }
     }
 
@@ -552,7 +503,9 @@ class AutoGLMService : AccessibilityService() {
         if (currentPkg == myPkg) {
             service?.hideFloatingWindow()
         } else {
-            service?.updateFloatingStatus(application.getString(R.string.action_error, msg))
+            service?.updateFloatingStatus(
+                application.getString(R.string.action_error, msg),
+                AssistantState.Error(application.getString(R.string.action_error, msg)))
         }
     }
 
@@ -567,7 +520,7 @@ class AutoGLMService : AccessibilityService() {
         // Notify floating window controller that task is no longer running
         // This ensures isTaskRunning flag is properly synchronized before dismissal
         val service = AutoGLMService.getInstance()
-        service?.floatingWindowController?.setTaskRunning(false)
+        service?.floatingWindowController?.setTaskRunning(false, AssistantState.Idle)
 
         // Note: The floating window will be dismissed by the UI layer (FloatingWindowContent.kt)
         // which also launches the main app after the window is fully hidden
@@ -706,7 +659,9 @@ class AutoGLMService : AccessibilityService() {
                     Log.d("AutoGLM_Debug", "Step: $step")
 
                     if (!DEBUG_MODE && service != null) {
-                        service.updateFloatingStatus(this@AutoGLMService.getString(R.string.status_thinking))
+                        service.updateFloatingStatus(
+                            this@AutoGLMService.getString(R.string.status_thinking),
+                            AssistantState.Processing(this@AutoGLMService.getString(R.string.status_thinking)))
                     }
 
                     // 1. Take Screenshot
@@ -811,7 +766,8 @@ class AutoGLMService : AccessibilityService() {
                     val action = ActionParser.parseAction(actionStr, screenWidth, screenHeight)
 
                     // Update Floating Window Status with friendly description
-                    service?.updateFloatingStatus(getActionDescription(action))
+                    service?.updateFloatingStatus(getActionDescription(action),
+                        AssistantState.Processing(getActionDescription(action)))
 
                     // 5. Execute Action
                     val executor = actionExecutor
@@ -827,7 +783,9 @@ class AutoGLMService : AccessibilityService() {
 
                     if (action is Action.Finish) {
                         isFinished = true
-                        service?.updateFloatingStatus(application.getString(R.string.action_finish))
+                        service?.updateFloatingStatus(
+                            application.getString(R.string.action_finish),
+                            AssistantState.Success(application.getString(R.string.action_finish)))
 
                         // Mark task as completed in FloatingWindowController
                         val floatingWindow = AutoGLMService.getInstance()?.floatingWindowController
@@ -866,7 +824,9 @@ class AutoGLMService : AccessibilityService() {
             if (!isFinished && isActive) {
                 if (!DEBUG_MODE) {
                     if (step >= maxSteps) {
-                        service?.updateFloatingStatus(application.getString(R.string.error_task_terminated_max_steps))
+                        service?.updateFloatingStatus(
+                            application.getString(R.string.error_task_terminated_max_steps),
+                            AssistantState.Error(application.getString(R.string.error_task_terminated_max_steps)))
 
                         // Mark task as completed in FloatingWindowController
                         val floatingWindow = AutoGLMService.getInstance()?.floatingWindowController

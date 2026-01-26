@@ -35,14 +35,13 @@ import com.aotuman.baobaoai.utils.SherpaKwsManager
 import com.aotuman.baobaoai.utils.SherpaModelManager
 import com.aotuman.baobaoai.utils.SherpaStreamingManager
 import com.aotuman.baobaoai.utils.SpeechRecognizerManager
-import com.aotuman.baobaoai.utils.VoiceAssistantManager
 import com.aotuman.baobaoai.utils.VoiceAssistantTest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class MainActivity : ComponentActivity() {
+class MainActivity2 : ComponentActivity() {
     
     private val permissions = arrayOf(
         Manifest.permission.RECORD_AUDIO,
@@ -62,7 +61,6 @@ class MainActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        initVoiceAssistant()
         enableEdgeToEdge()
         setContent {
             BaoBaoAITheme {
@@ -73,20 +71,11 @@ class MainActivity : ComponentActivity() {
                             // 启动完整的语音助手
                             val voiceAssistantTest = VoiceAssistantTest()
                             voiceAssistantTest.testVoiceAssistant(this)
+//                            initialStreaming()
                                            },
                         modifier = Modifier.padding(it)
                     )
                 }
-            }
-        }
-    }
-
-    private fun initVoiceAssistant(){
-        lifecycleScope.launch {
-            try {
-                VoiceAssistantManager.initialize(this@MainActivity)
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
         }
     }
@@ -190,22 +179,101 @@ class MainActivity : ComponentActivity() {
         private const val OVERLAY_PERMISSION_REQUEST_CODE = 1001
         private const val ACCESSIBILITY_PERMISSION_REQUEST_CODE = 1002
     }
-}
 
-@Composable
-fun MainScreen(onStartAssistant: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "BaoBao AI 语音助手",
-            fontSize = 24.sp,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-        Button(onClick = onStartAssistant) {
-            Text(text = "启动语音助手")
+    private fun initialStreaming() {
+        try {
+            // 创建StreamingManager
+            lifecycleScope.launch(Dispatchers.IO) {
+                SherpaStreamingManager.initialize(this@MainActivity2)
+                SherpaStreamingManager.startListening(this@MainActivity2, object : SherpaStreamingManager.StreamingDetectionListener {
+                    override fun onDetected(isEndpoint: Boolean, text: String) {
+                        Log.e("SherpaStreamingManager", "isEndpoint: $isEndpoint, onDetected: $text")
+                    }
+
+                    override fun onError(errorCode: Int, errorMessage: String) {
+                        Log.e("SherpaStreamingManager", "onError: $errorCode, $errorMessage")
+                    }
+
+                })
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun initializeKws() {
+        try {
+            // 创建KwsManager
+            lifecycleScope.launch(Dispatchers.IO) {
+                SherpaKwsManager.initialize(this@MainActivity2)
+                withContext(Dispatchers.Main) {
+                    if (SherpaKwsManager.modelState.value == SherpaKwsManager.ModelState.Ready) {
+                        // 启动SherpaKwsManager
+                        SherpaKwsManager.startListening(
+                            this@MainActivity2,
+                            object : SherpaKwsManager.KeywordDetectionListener {
+
+                                override fun onKeywordDetected(keyword: String) {
+                                    Log.e("jbjb", "Keyword detected: $keyword")
+                                }
+
+                                override fun onError(
+                                    errorCode: Int,
+                                    errorMessage: String
+                                ) {
+                                    Log.e("jbjb", "Error in KwsManager: $errorCode, $errorMessage")
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e("jbjb", "Error initializing SherpaKwsManager: ${e.message}")
+        }
+    }
+
+    private fun initializeSpeechRecognizer() {
+        try {
+            // 初始化模型
+            lifecycleScope.launch(Dispatchers.IO) {
+                SherpaModelManager.initModel(this@MainActivity2)
+
+                var speechRecognizerManager: SpeechRecognizerManager? = null
+                // 模型初始化成功后，创建SpeechRecognizerManager
+                withContext(Dispatchers.Main) {
+                    speechRecognizerManager = SpeechRecognizerManager(this@MainActivity2)
+                    speechRecognizerManager.startListening(
+                        onResultCallback = { result ->
+                            Log.e("jbjb", "Speech recognition result: $result")
+                        },
+                        onErrorCallback = { error ->
+                            Log.e("jbjb", "Speech recognition error: $error")
+                        }
+                    )
+                }
+                withContext(Dispatchers.IO) {
+                    delay(10000)
+                    speechRecognizerManager?.stopListening()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("jbjb", "Error initializing speech recognizer: ${e.message}")
+        }
+    }
+
+    private fun initializeAVD() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            SherpaVadManager.initialize(this@MainActivity2)
+            SherpaVadManager.startListening(
+                onResultCallback = { result ->
+                    Log.d("jbjb", "SherpaAVDManager result: $result")
+                },
+                onErrorCallback = { error ->
+                    Log.e("jbjb", "SherpaAVDManager error: $error")
+                },
+            )
         }
     }
 }

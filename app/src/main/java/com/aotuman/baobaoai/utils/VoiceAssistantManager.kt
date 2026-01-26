@@ -58,7 +58,7 @@ object VoiceAssistantManager {
     }
     
     // 停止语音助手
-    suspend fun stopAssistant() {
+    fun stopAssistant() {
         // 停止所有监听
         SherpaKwsManager.stopListening()
         SherpaStreamingManager.stopListening()

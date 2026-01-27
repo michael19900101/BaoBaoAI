@@ -68,12 +68,7 @@ class MainActivity : ComponentActivity() {
             BaoBaoAITheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) {
                     MainScreen(
-                        onStartAssistant = {
-                            checkPermissions()
-                            // 启动完整的语音助手
-                            val voiceAssistantTest = VoiceAssistantTest()
-                            voiceAssistantTest.testVoiceAssistant(this)
-                                           },
+                        onStartAssistant = { checkPermissions() },
                         modifier = Modifier.padding(it)
                     )
                 }

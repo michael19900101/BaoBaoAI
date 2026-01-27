@@ -15,10 +15,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.aotuman.baobaoai.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,6 +34,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -190,7 +195,7 @@ fun FloatingBall(
     modifier: Modifier = Modifier
 ) {
     val (size, color, icon) = when (state) {
-        is AssistantState.Idle -> Triple(24.dp, Color(255, 255, 255, alpha = 77), "")
+        is AssistantState.Idle -> Triple(60.dp, Color(0, 0, 0, alpha = 180), "")
         is AssistantState.Listening -> Triple(48.dp, Color(33, 150, 243, alpha = 240), "🎤")
         is AssistantState.Processing -> Triple(48.dp, Color(156, 39, 176, alpha = 240), "⏳")
         is AssistantState.Success -> Triple(48.dp, Color(76, 175, 80, alpha = 240), "✅")
@@ -202,10 +207,10 @@ fun FloatingBall(
 
     val alpha = when (state) {
         is AssistantState.Idle -> infiniteTransition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 0.8f,
+            initialValue = 0.1f,
+            targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(3000, easing = LinearEasing),
+                animation = tween(1000, easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "idleAlpha"
@@ -237,7 +242,14 @@ fun FloatingBall(
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        if (icon.isNotEmpty()) {
+        if (state is AssistantState.Idle) {
+            Image(
+                painter = painterResource(id = R.mipmap.ic_launcher),
+                contentDescription = "App Icon",
+                modifier = Modifier.size(size),
+                contentScale = ContentScale.Crop
+            )
+        } else if (icon.isNotEmpty()) {
             Text(
                 text = icon,
                 fontSize = 24.sp

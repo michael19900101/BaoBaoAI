@@ -123,6 +123,10 @@ class AutoGLMService : AccessibilityService() {
         startAssistant()
     }
 
+    private fun testSend() {
+
+    }
+
     private fun startAssistant() {
         serviceScope.launch {
             // 开始语音助手

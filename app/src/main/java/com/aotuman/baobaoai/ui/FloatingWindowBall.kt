@@ -21,17 +21,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aotuman.baobaoai.FloatingWindowController
+import com.aotuman.baobaoai.FloatingWindowState
 import kotlinx.coroutines.delay
 
 // 状态枚举
@@ -51,33 +56,57 @@ data class WindowConfig(
 )
 
 @Composable
-fun FloatingWindowAndBall(
-    state: AssistantState,
+fun FloatingWindowBall(
+    floatingWindowController: FloatingWindowController,
     onStateChange: (AssistantState) -> Unit
 ) {
+    // Reactively collect the floating window state
+    val state by floatingWindowController.stateFlow.collectAsState()
+
+    val assistantState = when (val s = state) {
+        is FloatingWindowState.Visible -> s.assistantState
+        else -> AssistantState.Idle
+    }
+
+    // Extract status, isTaskRunning, and onStopCallback from current state
+    val status = when (val s = state) {
+        is FloatingWindowState.Visible -> s.statusText
+        else -> ""
+    }
+    val isTaskRunning = when (val s = state) {
+        is FloatingWindowState.Visible -> s.isTaskRunning
+        else -> false
+    }
+    val onStopCallback = when (val s = state) {
+        is FloatingWindowState.Visible -> s.onStopCallback
+        else -> null
+    }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.padding(16.dp)
     ) {
         // 悬浮窗
-        if (state !is AssistantState.Idle) {
+        if (assistantState !is AssistantState.Idle) {
             FloatingWindow(
-                state = state,
+                state = assistantState,
                 onDismiss = { onStateChange(AssistantState.Idle) }
             )
         }
 
         // 悬浮球
         FloatingBall(
-            state = state,
+            state = assistantState,
             onClick = {
-                when (state) {
-                    is AssistantState.Idle -> onStateChange(AssistantState.Listening())
-                    is AssistantState.Listening -> onStateChange(AssistantState.Processing("正在打开微信..."))
-                    is AssistantState.Processing -> onStateChange(AssistantState.Success("微信已打开"))
-                    else -> onStateChange(AssistantState.Idle)
-                }
+//                when (state) {
+//                    is AssistantState.Idle -> onStateChange(AssistantState.Listening())
+//                    is AssistantState.Listening -> onStateChange(AssistantState.Processing("正在打开微信..."))
+//                    is AssistantState.Processing -> onStateChange(AssistantState.Success("微信已打开"))
+//                    else -> onStateChange(AssistantState.Idle)
+//                }
             }
         )
     }

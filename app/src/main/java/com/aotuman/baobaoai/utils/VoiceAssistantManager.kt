@@ -24,6 +24,7 @@ object VoiceAssistantManager {
     
     // 回调
     private var onWakeUp: (() -> Unit)? = null
+    private var onListening: ((String) -> Unit)? = null
     private var onCommand: ((String) -> Unit)? = null
     private var onSleep: (() -> Unit)? = null
     private var onError: ((String) -> Unit)? = null
@@ -44,11 +45,13 @@ object VoiceAssistantManager {
     fun startAssistant(
         context: Context,
         onWakeUpCallback: () -> Unit,
+        onListeningCallback: ((String) -> Unit)? = null,
         onCommandCallback: (String) -> Unit,
         onSleepCallback: () -> Unit,
         onErrorCallback: (String) -> Unit
     ) {
         onWakeUp = onWakeUpCallback
+        onListening = onListeningCallback
         onCommand = onCommandCallback
         onSleep = onSleepCallback
         onError = onErrorCallback
@@ -114,6 +117,8 @@ object VoiceAssistantManager {
                     Log.i(TAG, "识别结果: $text")
                     processCommand(text)
                     sleep()
+                } else {
+                    onListening?.invoke(text)
                 }
             }
 

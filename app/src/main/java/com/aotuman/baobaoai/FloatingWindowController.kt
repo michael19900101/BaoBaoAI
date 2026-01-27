@@ -29,10 +29,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import android.os.Handler
 import android.os.Looper
+import android.view.View
+import android.view.ViewTreeObserver
 import com.aotuman.baobaoai.ui.AssistantState
-import com.aotuman.baobaoai.ui.FloatingWindowAndBall
+import com.aotuman.baobaoai.ui.FloatingWindowBall
 
 import com.aotuman.baobaoai.utils.DisplayUtils
+import kotlin.math.abs
 
 /**
  * Sealed class hierarchy representing the floating window state machine.
@@ -416,21 +419,8 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                         this@FloatingWindowController,
                         this@FloatingWindowController
                     ) {
-                        val isListening by _isListening.collectAsState()
-                        val speechText by _speechText.collectAsState()
-//                        FloatingWindowUI(
-//                            speechText = speechText,
-//                            isListening = isListening,
-//                            onToggleExpand = { /* 展开/折叠窗口 */ },
-//                            onStartListening = {
-//                                onStartListeningCallback?.invoke()
-//                            },
-//                            onStopListening = {
-//                                onStopListeningCallback?.invoke()
-//                            }
-//                        )
-                        FloatingWindowAndBall(
-                            state = newState.assistantState,
+                        FloatingWindowBall(
+                            floatingWindowController = this@FloatingWindowController,
                             onStateChange = { }
                         )
                     }
@@ -445,7 +435,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                     if (onComplete != null) {
                         val view = floatView
                         if (view != null) {
-                            view.viewTreeObserver?.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+                            view.viewTreeObserver?.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
                                 override fun onGlobalLayout() {
                                     view.viewTreeObserver?.removeOnGlobalLayoutListener(this)
                                     onComplete.invoke()
@@ -712,7 +702,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
     fun isOccupyingSpace(x: Float, y: Float): Boolean {
         // Only occupy space if window is actually visible (not TemporarilyHidden)
         if (_stateFlow.value !is FloatingWindowState.Visible) return false
-        if (!isShowing || floatView == null || floatView?.visibility != android.view.View.VISIBLE) return false
+        if (!isShowing || floatView == null || floatView?.visibility != View.VISIBLE) return false
 
         val location = IntArray(2)
         floatView?.getLocationOnScreen(location)
@@ -741,7 +731,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         }
 
         // Only update if significantly different
-        if (kotlin.math.abs(windowParams.y - newY) > 200) {
+        if (abs(windowParams.y - newY) > 200) {
             windowParams.y = newY
             floatingWindowManager.updateWindowLayout(floatView, windowParams)
         }

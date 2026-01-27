@@ -135,12 +135,17 @@ class AutoGLMService : AccessibilityService() {
                     _floatingWindowController?.setTaskRunning(true, AssistantState.Listening("正在聆听..."))
                     _floatingWindowController?.setListening(true)
                 },
+                onListeningCallback = { result ->
+                    _floatingWindowController?.updateStatus(result, AssistantState.Listening(result))
+                    _floatingWindowController?.setTaskRunning(true, AssistantState.Listening(result))
+                    _floatingWindowController?.setListening(true)
+                },
                 onCommandCallback = { result ->
                     Log.i(TAG, "=== 接收到命令: $result ===")
                     // 这里可以添加命令处理逻辑
-                    _floatingWindowController?.updateStatus("正在处理请求...", AssistantState.Processing("正在处理请求..."))
+                    _floatingWindowController?.updateStatus(result, AssistantState.Processing(result))
                     _floatingWindowController?.updateSpeechText(result)
-                    _floatingWindowController?.setTaskRunning(true, AssistantState.Processing("正在处理请求..."))
+                    _floatingWindowController?.setTaskRunning(true, AssistantState.Processing(result))
                     _floatingWindowController?.setListening(false)
 
 

@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,10 +23,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aotuman.baobaoai.ui.AssistantState
-import com.aotuman.baobaoai.ui.FloatingWindowAndBall
 import com.aotuman.baobaoai.ui.theme.BaoBaoAITheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,7 +46,7 @@ class YuanBaoVoiceAssistantActivity : ComponentActivity() {
 
 @Composable
 fun YuanBaoVoiceAssistantScreen() {
-    var currentState by remember { mutableStateOf<AssistantState>(AssistantState.Idle) }
+    var currentState by remember { mutableStateOf<VoiceAssistantState>(VoiceAssistantState.Idle) }
     val coroutineScope = rememberCoroutineScope()
     
     // 渐变背景
@@ -98,19 +98,19 @@ fun YuanBaoVoiceAssistantScreen() {
                 onStateChange = { newState ->
                     currentState = newState
                     // 成功/错误状态自动重置
-                    if (newState is AssistantState.Success || newState is AssistantState.Error) {
+                    if (newState is VoiceAssistantState.Success || newState is VoiceAssistantState.Error) {
                         coroutineScope.launch {
                             delay(2000)
                             if (currentState == newState) {
-                                currentState = AssistantState.Idle
+                                currentState = VoiceAssistantState.Idle
                             }
                         }
                     }
                     // 监听状态模拟语音输入
-                    if (newState is AssistantState.Listening) {
+                    if (newState is VoiceAssistantState.Listening) {
                         coroutineScope.launch {
                             simulateVoiceInput(newState.text) { text ->
-                                currentState = AssistantState.Listening(text)
+                                currentState = VoiceAssistantState.Listening(text)
                             }
                         }
                     }
@@ -127,8 +127,8 @@ fun YuanBaoVoiceAssistantScreen() {
 
 @Composable
 fun PhoneMockup(
-    currentState: AssistantState,
-    onStateChange: (AssistantState) -> Unit,
+    currentState: VoiceAssistantState,
+    onStateChange: (VoiceAssistantState) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -242,8 +242,8 @@ fun PhoneMockup(
 
 @Composable
 fun ControlPanel(
-    currentState: AssistantState,
-    onStateChange: (AssistantState) -> Unit,
+    currentState: VoiceAssistantState,
+    onStateChange: (VoiceAssistantState) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -267,18 +267,18 @@ fun ControlPanel(
             ControlButton(
                 icon = "○",
                 text = "待机状态",
-                isActive = currentState is AssistantState.Idle,
+                isActive = currentState is VoiceAssistantState.Idle,
                 backgroundColor = Color(0xFFf5f5f5),
-                onClick = { onStateChange(AssistantState.Idle) },
+                onClick = { onStateChange(VoiceAssistantState.Idle) },
                 modifier = Modifier.weight(1f)
             )
             
             ControlButton(
                 icon = "🎤",
                 text = "语音监听",
-                isActive = currentState is AssistantState.Listening,
+                isActive = currentState is VoiceAssistantState.Listening,
                 backgroundColor = Color(0xFF2196f3),
-                onClick = { onStateChange(AssistantState.Listening()) },
+                onClick = { onStateChange(VoiceAssistantState.Listening()) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -292,18 +292,18 @@ fun ControlPanel(
             ControlButton(
                 icon = "⏳",
                 text = "AI处理中",
-                isActive = currentState is AssistantState.Processing,
+                isActive = currentState is VoiceAssistantState.Processing,
                 backgroundColor = Color(0xFF9c27b0),
-                onClick = { onStateChange(AssistantState.Processing("正在打开微信...")) },
+                onClick = { onStateChange(VoiceAssistantState.Processing("正在打开微信...")) },
                 modifier = Modifier.weight(1f)
             )
             
             ControlButton(
                 icon = "✅",
                 text = "执行成功",
-                isActive = currentState is AssistantState.Success,
+                isActive = currentState is VoiceAssistantState.Success,
                 backgroundColor = Color(0xFF4caf50),
-                onClick = { onStateChange(AssistantState.Success("微信已打开")) },
+                onClick = { onStateChange(VoiceAssistantState.Success("微信已打开")) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -451,4 +451,187 @@ suspend fun simulateVoiceInput(
     // 语音输入完成后，自动切换到处理状态
     delay(500)
     // 这里不自动切换，让用户手动控制
+}
+
+// 状态枚举
+sealed class VoiceAssistantState {
+    object Idle : VoiceAssistantState()
+    data class Listening(val text: String = "") : VoiceAssistantState()
+    data class Processing(val text: String) : VoiceAssistantState()
+    data class Success(val text: String) : VoiceAssistantState()
+    data class Error(val message: String) : VoiceAssistantState()
+}
+
+data class WindowConfig(
+    val icon: String,
+    val status: String,
+    val text: String,
+    val backgroundColor: Color
+)
+
+@Composable
+fun FloatingWindowAndBall(
+    state: VoiceAssistantState,
+    onStateChange: (VoiceAssistantState) -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(16.dp)
+    ) {
+        // 悬浮窗
+        if (state !is VoiceAssistantState.Idle) {
+            FloatingWindow(
+                state = state,
+                onDismiss = { onStateChange(VoiceAssistantState.Idle) }
+            )
+        }
+
+        // 悬浮球
+        FloatingBall(
+            state = state,
+            onClick = {
+                when (state) {
+                    is VoiceAssistantState.Idle -> onStateChange(VoiceAssistantState.Listening())
+                    is VoiceAssistantState.Listening -> onStateChange(VoiceAssistantState.Processing("正在打开微信..."))
+                    is VoiceAssistantState.Processing -> onStateChange(VoiceAssistantState.Success("微信已打开"))
+                    else -> onStateChange(VoiceAssistantState.Idle)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun FloatingWindow(
+    state: VoiceAssistantState,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val config = when (state) {
+        is VoiceAssistantState.Listening -> WindowConfig("🎤", "聆听中", state.text.ifEmpty { "打开微信给张三发消息" }, Color(33, 150, 243, alpha = 240))
+        is VoiceAssistantState.Processing -> WindowConfig("⏳", "执行中", state.text, Color(156, 39, 176, alpha = 240))
+        is VoiceAssistantState.Success -> WindowConfig("✅", "完成", state.text, Color(76, 175, 80, alpha = 240))
+        is VoiceAssistantState.Error -> WindowConfig("❌", "失败", state.message, Color(244, 67, 54, alpha = 240))
+        else -> null
+    }
+
+    if (config != null) {
+        // 成功/错误状态自动收起
+        if (state is VoiceAssistantState.Success || state is VoiceAssistantState.Error) {
+            LaunchedEffect(state) {
+                delay(2000)
+                onDismiss()
+            }
+        }
+
+        val animatedAlpha by animateFloatAsState(
+            targetValue = 1f,
+            animationSpec = tween(300),
+            label = "windowAlpha"
+        )
+
+        Box(
+            modifier = modifier
+                .widthIn(min = 160.dp, max = 240.dp)
+                .alpha(animatedAlpha)
+                .clip(RoundedCornerShape(12.dp))
+                .background(config.backgroundColor)
+//                .shadow(8.dp, RoundedCornerShape(12.dp))
+                .clickable { if (state is VoiceAssistantState.Success || state is VoiceAssistantState.Error) onDismiss() }
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = config.icon,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = config.status,
+                        fontSize = 16.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Text(
+                    text = config.text,
+                    fontSize = 18.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FloatingBall(
+    state: VoiceAssistantState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val (size, color, icon) = when (state) {
+        is VoiceAssistantState.Idle -> Triple(24.dp, Color(255, 255, 255, alpha = 77), "")
+        is VoiceAssistantState.Listening -> Triple(48.dp, Color(33, 150, 243, alpha = 240), "🎤")
+        is VoiceAssistantState.Processing -> Triple(48.dp, Color(156, 39, 176, alpha = 240), "⏳")
+        is VoiceAssistantState.Success -> Triple(48.dp, Color(76, 175, 80, alpha = 240), "✅")
+        is VoiceAssistantState.Error -> Triple(48.dp, Color(244, 67, 54, alpha = 240), "❌")
+    }
+
+    // 动画
+    val infiniteTransition = rememberInfiniteTransition(label = "ballAnimation")
+
+    val alpha = when (state) {
+        is VoiceAssistantState.Idle -> infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "idleAlpha"
+        ).value
+        else -> 1f
+    }
+
+    val scale = when (state) {
+        is VoiceAssistantState.Listening -> infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "listeningScale"
+        ).value
+        else -> 1f
+    }
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .scale(scale)
+            .alpha(alpha)
+            .clip(CircleShape)
+            .background(color)
+//            .shadow(4.dp, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (icon.isNotEmpty()) {
+            Text(
+                text = icon,
+                fontSize = 24.sp
+            )
+        }
+    }
 }

@@ -24,6 +24,7 @@ import com.aotuman.baobaoai.ui.AssistantState
 import com.aotuman.baobaoai.utils.AppMapper
 import com.aotuman.baobaoai.utils.AppStateTracker
 import com.aotuman.baobaoai.utils.DisplayUtils
+import com.aotuman.baobaoai.utils.SystemCtrlUtil
 import com.aotuman.baobaoai.utils.VoiceAssistantManager
 import com.sidhu.autoinput.GestureAnimator
 import kotlinx.coroutines.CoroutineScope
@@ -123,206 +124,6 @@ class AutoGLMService : AccessibilityService() {
         startAssistant()
     }
 
-    private fun testSendMessage(text: String) {
-        Log.d("AutoGLM_Trace", "testSendMessage called with text: $text")
-        if (text.isBlank()) return
-
-        val service = AutoGLMService.getInstance()
-        currentTaskJob = kotlinx.coroutines.Job()
-
-        serviceScope.launch(Dispatchers.IO + currentTaskJob!!) {
-            Log.d("AutoGLM_Debug", "Test coroutine started")
-
-            AppMapper.refreshLauncherApps()
-
-            Log.d("AutoGLM_Debug", "Starting new conversation history")
-            apiHistory.clear()
-            val dateFormat = SimpleDateFormat("yyyy年MM月dd日 EEEE", Locale.getDefault())
-            val dateStr = this@AutoGLMService.getString(R.string.prompt_date_prefix) + dateFormat.format(Date())
-            apiHistory.add(Message("system", dateStr + "\n" + ModelClient.SYSTEM_PROMPT))
-
-            var currentPrompt = "帮我打开美团"
-            var step = 0
-            val maxSteps = 20
-
-            val isAppInForeground = if (DEBUG_MODE) false else AppStateTracker.isAppInForeground(application)
-            Log.d("AutoGLM_Trace", "App in foreground: $isAppInForeground")
-
-            if (!DEBUG_MODE && service != null) {
-                service.resetFloatingWindowForNewTask()
-
-                withContext(Dispatchers.Main) {
-                    if (isAppInForeground) {
-                        Log.d("AutoGLM_Trace", "App is in foreground, executing goHome()")
-                        service.goHome()
-                    } else {
-                        Log.d("AutoGLM_Trace", "App not in foreground, skipping goHome()")
-                    }
-                }
-
-                Log.d("AutoGLM_Trace", "Showing floating window and waiting for layout")
-                service.showFloatingWindowAndWait(
-                    onStop = { stopTask() },
-                    isRunning = true
-                )
-            }
-
-            var isFinished = false
-
-            try {
-                while (isActive && step < maxSteps) {
-                    step++
-                    Log.d("AutoGLM_Debug", "Test Step: $step")
-
-                    if (!DEBUG_MODE && service != null) {
-                        service.updateFloatingStatus(
-                            this@AutoGLMService.getString(R.string.status_thinking),
-                            AssistantState.Processing(this@AutoGLMService.getString(R.string.status_thinking)))
-                    }
-
-                    val screenshot = if (step == 1 && isAppInForeground) {
-                        Log.d("AutoGLM_Debug", "Step 1: Skipping screenshot (app in foreground)")
-                        null
-                    } else {
-                        Log.d("AutoGLM_Debug", "Taking screenshot for step $step...")
-                        if (DEBUG_MODE) {
-                            Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888)
-                        } else {
-                            service?.takeScreenshot()
-                        }
-                    }
-
-                    if (screenshot == null && !(step == 1 && isAppInForeground)) {
-                        Log.e("AutoGLM_Debug", "Screenshot failed")
-                        postError(application.getString(R.string.error_screenshot_failed))
-                        break
-                    }
-
-                    if (screenshot != null) {
-                        Log.d("ChatViewModel", "Screenshot size: ${screenshot.width}x${screenshot.height}")
-                    }
-
-                    val screenWidth = if (DEBUG_MODE) 1080 else DisplayUtils.getScreenWidth(getApplication())
-                    val screenHeight = if (DEBUG_MODE) 2400 else DisplayUtils.getScreenHeight(getApplication())
-                    Log.d("ChatViewModel", "Screen size: ${screenWidth}x${screenHeight}")
-
-                    val currentApp = if (DEBUG_MODE) "DebugApp" else (service?.currentApp?.value ?: "Unknown")
-                    val screenInfo = "{\"current_app\": \"$currentApp\"}"
-
-                    val textPrompt = if (step == 1) {
-                        "$currentPrompt\n\n$screenInfo"
-                    } else {
-                        "** Screen Info **\n\n$screenInfo"
-                    }
-
-                    val userContentItems = mutableListOf<ContentItem>()
-                    if (screenshot != null) {
-                        userContentItems.add(ContentItem("image_url", imageUrl = ImageUrl("data:image/jpeg;base64,${ModelClient.bitmapToBase64(screenshot)}")))
-                    }
-                    userContentItems.add(ContentItem("text", text = textPrompt))
-
-                    val userMessage = Message("user", userContentItems)
-                    apiHistory.add(userMessage)
-
-                    Log.d("AutoGLM_Debug", "Simulating API response...")
-                    val responseText = simulateApiResponse(text, step)
-                    val unescapedResponseText = unescapeResponse(responseText)
-                    Log.d("AutoGLM_Debug", "Simulated response received: $unescapedResponseText")
-
-                    if (unescapedResponseText.startsWith("Error")) {
-                        Log.e("AutoGLM_Debug", "API Error: $unescapedResponseText")
-                        postError(unescapedResponseText)
-                        break
-                    }
-
-                    val (thinking, _) = ActionParser.parseResponsePartsToParsedAction(unescapedResponseText)
-                    val actionStr = ActionParser.extractActionString(unescapedResponseText)
-
-                    Log.i("AutoGLM_Log", "\n==================================================")
-                    Log.i("AutoGLM_Log", "💭 思考过程:")
-                    Log.i("AutoGLM_Log", thinking)
-                    Log.i("AutoGLM_Log", "🎯 执行动作:")
-                    Log.i("AutoGLM_Log", actionStr)
-                    Log.i("AutoGLM_Log", "==================================================")
-
-                    apiHistory.add(Message("assistant", buildAssistantContent(thinking, actionStr)))
-
-                    val screenshotPath = if (screenshot != null) {
-                        imageStorage.saveImage(screenshot)
-                    } else {
-                        null
-                    }
-                    Log.d("AutoGLM_Debug", "Saved screenshot to $screenshotPath")
-
-                    if (DEBUG_MODE) {
-                        Log.d("AutoGLM_Debug", "DEBUG_MODE enabled, stopping after one round")
-                        break
-                    }
-
-                    val action = ActionParser.parseAction(actionStr, screenWidth, screenHeight)
-
-                    service?.updateFloatingStatus(getActionDescription(action),
-                        AssistantState.Processing(getActionDescription(action)))
-
-                    val executor = actionExecutor
-                    if (executor == null) {
-                        postError(application.getString(R.string.error_executor_null))
-                        break
-                    }
-
-                    ensureActive()
-
-                    val success = executor.execute(action)
-
-                    if (action is Action.Finish) {
-                        isFinished = true
-                        service?.updateFloatingStatus(
-                            application.getString(R.string.action_finish),
-                            AssistantState.Success(application.getString(R.string.action_finish)))
-
-                        val floatingWindow = AutoGLMService.getInstance()?.floatingWindowController
-                        floatingWindow?.markTaskCompleted()
-
-                        updateTaskState(TaskEndState.COMPLETED, step)
-                        break
-                    }
-
-                    if (!success) {
-                        apiHistory.add(Message("user", application.getString(R.string.error_last_action_failed)))
-                    }
-
-                    removeImagesFromHistory()
-
-                    delay(2000)
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                Log.d("ChatViewModel", "Task was cancelled by user")
-                updateTaskState(TaskEndState.USER_STOPPED, step)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Log.e("AutoGLM_Debug", "Exception in testSendMessage loop: ${e.message}", e)
-                postError(application.getString(R.string.error_runtime_exception, e.message))
-            } finally {
-
-            }
-
-            if (!isFinished && isActive) {
-                if (!DEBUG_MODE) {
-                    if (step >= maxSteps) {
-                        service?.updateFloatingStatus(
-                            application.getString(R.string.error_task_terminated_max_steps),
-                            AssistantState.Error(application.getString(R.string.error_task_terminated_max_steps)))
-
-                        val floatingWindow = AutoGLMService.getInstance()?.floatingWindowController
-                        floatingWindow?.markTaskCompleted()
-
-                        updateTaskState(TaskEndState.MAX_STEPS_REACHED, step)
-                    }
-                }
-            }
-        }
-    }
-
     private fun simulateApiResponse(userText: String, step: Int): String {
         return when {
             userText.contains("美团") && step == 1 -> {
@@ -362,8 +163,8 @@ class AutoGLMService : AccessibilityService() {
                     _floatingWindowController?.setListening(true)
                 },
                 onListeningCallback = { result ->
-                    _floatingWindowController?.updateStatus(result, AssistantState.Listening(result))
-                    _floatingWindowController?.setTaskRunning(true, AssistantState.Listening(result))
+                    _floatingWindowController?.updateStatus(result, AssistantState.Listening(result), false)
+                    _floatingWindowController?.setTaskRunning(true, AssistantState.Listening(result), false)
                     _floatingWindowController?.setListening(true)
                 },
                 onCommandCallback = { result ->
@@ -379,16 +180,12 @@ class AutoGLMService : AccessibilityService() {
                     // 执行核心功能：获取截图->发送给模型->解析响应->执行操作指令
                     serviceScope.launch(Dispatchers.IO) {
                         try{
-                            testSendMessage(voiceResultText)
-//                            sendMessage(text = voiceResultText)
+//                            testSendMessage(voiceResultText)
+                            sendMessage(text = voiceResultText)
                         } catch (e: Exception) {
                             Log.e("AutoGLMService", "Error processing request: ${e.message}", e)
                             withContext(Dispatchers.Main) {
                                 _floatingWindowController?.updateStatus("处理请求时出错: ${e.message}", AssistantState.Error("处理请求时出错: ${e.message}"))
-                            }
-                        } finally {
-                            withContext(Dispatchers.Main) {
-                                _floatingWindowController?.setTaskRunning(false, AssistantState.Idle)
                             }
                         }
                     }
@@ -808,10 +605,19 @@ class AutoGLMService : AccessibilityService() {
         }
     }
 
+    fun specialHandle(text: String): Boolean {
+        if (text.contains("解锁")) {
+            SystemCtrlUtil.unlockScreen()
+            return true
+        }
+        return false
+    }
+
     fun sendMessage(text: String) {
         Log.d("AutoGLM_Trace", "sendMessage called with text: $text")
         // Skip blank check
         if (text.isBlank()) return
+        if (specialHandle(text)) return
 
         if (modelClient == null) {
             Log.d("AutoGLM_Trace", "modelClient is null, initializing...")
@@ -978,14 +784,12 @@ class AutoGLMService : AccessibilityService() {
                     apiHistory.add(Message("assistant", buildAssistantContent(thinking, actionStr)))
 
                     // Save screenshot if available
-                    val screenshotPath = if (screenshot != null) {
-                        imageStorage.saveImage(screenshot)
-                    } else {
-                        null
-                    }
-                    Log.d("AutoGLM_Debug", "Saved screenshot to $screenshotPath")
-                    
-                    // Save assistant message to database with screenshot
+//                    val screenshotPath = if (screenshot != null) {
+//                        imageStorage.saveImage(screenshot)
+//                    } else {
+//                        null
+//                    }
+//                    Log.d("AutoGLM_Debug", "Saved screenshot to $screenshotPath")
 
 
                     // If DEBUG_MODE, stop here after one round

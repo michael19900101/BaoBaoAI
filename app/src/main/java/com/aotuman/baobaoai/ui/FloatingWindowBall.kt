@@ -1,5 +1,6 @@
 package com.aotuman.baobaoai.ui
 
+import android.util.Log
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -70,6 +71,7 @@ fun FloatingWindowBall(
 
     val assistantState = when (val s = state) {
         is FloatingWindowState.Visible -> s.assistantState
+        is FloatingWindowState.TaskCompleted -> AssistantState.Success(s.statusText)
         else -> AssistantState.Idle
     }
 
@@ -88,6 +90,17 @@ fun FloatingWindowBall(
     }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Success状态维持5秒后自动变为Idle
+    LaunchedEffect(assistantState) {
+        if (assistantState is AssistantState.Success) {
+            Log.e("FloatingWindowBall", "Success状态维持5秒后自动变为Idle")
+            delay(5000)
+            floatingWindowController.updateStatus("准备就绪", AssistantState.Idle)
+            floatingWindowController.setTaskRunning(false, AssistantState.Idle)
+            floatingWindowController.setListening(false)
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.End,

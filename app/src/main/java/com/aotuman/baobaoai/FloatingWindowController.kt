@@ -78,7 +78,8 @@ sealed class FloatingWindowState {
     data class TemporarilyHidden(
         val cachedStatusText: String,
         val cachedIsTaskRunning: Boolean,
-        val cachedOnStopCallback: (() -> Unit)?
+        val cachedOnStopCallback: (() -> Unit)?,
+        val cachedAssistantState: AssistantState,
     ) : FloatingWindowState()
 
     /**
@@ -250,6 +251,11 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         controllerScope.launch {
             Log.d("FloatingWindow", "resetForNewTask() called, current state: ${_stateFlow.value}")
             val defaultStatus = "准备就绪"
+            val currentState = _stateFlow.value
+            var defaultAssistantState: AssistantState =  AssistantState.Idle
+            if (currentState is FloatingWindowState.Visible) {
+                defaultAssistantState = currentState.assistantState
+            }
             val preservedOnStopCallback = when (val s = _stateFlow.value) {
                 is FloatingWindowState.Visible -> s.onStopCallback
                 is FloatingWindowState.TemporarilyHidden -> s.cachedOnStopCallback
@@ -269,7 +275,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                 defaultStatus,
                 true,
                 preservedOnStopCallback,
-                AssistantState.Listening()))
+                defaultAssistantState))
         }
     }
 
@@ -372,7 +378,8 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
      */
     suspend fun setState(
         newState: FloatingWindowState,
-        onComplete: (() -> Unit)? = null
+        onComplete: (() -> Unit)? = null,
+        enableLog: Boolean = true,
     ) = stateMutex.withLock {
         withContext(Dispatchers.Main) {
         val oldState = _stateFlow.value
@@ -383,7 +390,9 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
             return@withContext
         }
 
-        Log.d("FloatingWindow", "State transition: $oldState -> $newState")
+        if (enableLog) {
+            Log.d("FloatingWindow", "State transition: $oldState -> $newState")
+        }
 
         when (newState) {
             is FloatingWindowState.Hidden -> {
@@ -403,9 +412,11 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                 // Log the state transition
                 val oldStatusText = (oldState as? FloatingWindowState.Visible)?.statusText ?: "N/A"
                 val oldIsTaskRunning = (oldState as? FloatingWindowState.Visible)?.isTaskRunning
-                Log.d("FloatingWindow", "setState: Transition to Visible - " +
-                    "status=\"$oldStatusText\"->\"${newState.statusText}\", " +
-                    "isTaskRunning=$oldIsTaskRunning->${newState.isTaskRunning}")
+                if (enableLog) {
+                    Log.d("FloatingWindow", "setState: Transition to Visible - " +
+                        "status=\"$oldStatusText\"->\"${newState.statusText}\", " +
+                        "isTaskRunning=$oldIsTaskRunning->${newState.isTaskRunning}")
+                }
 
                 if (!isShowing) {
                     // Create and add the window
@@ -543,9 +554,9 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
             defaultStatus,
             isRunning,
             onStop,
-            AssistantState.Idle)) {
+            AssistantState.Idle), onComplete = {
             layoutComplete.complete(Unit)
-        }
+        })
         layoutComplete.await()
         Log.d("FloatingWindow", "showAndWaitForLayout: Window layout completed")
     }
@@ -565,7 +576,8 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         isTaskRunning: Boolean? = null,
         onStopCallback: (() -> Unit)? = null,
         reason: String,
-        assistantState: AssistantState
+        assistantState: AssistantState,
+        enableLog: Boolean = true
     ) {
         val currentState = _stateFlow.value
 
@@ -579,9 +591,11 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         val newCallback = onStopCallback ?: oldCallback
 
         // Log the state transition
-        Log.d("FloatingWindow", "updateVisibleState [$reason]: " +
-            "status=\"$oldStatusText\"->\"$newStatusText\"${if (statusText != null) "" else " (unchanged)"}, " +
-            "isTaskRunning=$oldIsTaskRunning->$newIsTaskRunning${if (isTaskRunning != null) "" else " (unchanged)"}")
+        if (enableLog) {
+            Log.d("FloatingWindow", "updateVisibleState [$reason]: " +
+                    "status=\"$oldStatusText\"->\"$newStatusText\"${if (statusText != null) "" else " (unchanged)"}, " +
+                    "isTaskRunning=$oldIsTaskRunning->$newIsTaskRunning${if (isTaskRunning != null) "" else " (unchanged)"}")
+        }
 
         // Go through setState for validation (single point of synchronization)
         val newState = FloatingWindowState.Visible(
@@ -590,18 +604,27 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
             onStopCallback = newCallback,
             assistantState = assistantState
         )
-        setState(newState)
+
+        // Handle TaskCompleted -> Visible transition
+        // First transition to Hidden, then to Visible
+        if (_stateFlow.value is FloatingWindowState.TaskCompleted) {
+            if (enableLog) {
+                Log.d("FloatingWindow", "updateVisibleState: Transitioning from TaskCompleted to Hidden, then to Visible")
+            }
+            setState(FloatingWindowState.Hidden, enableLog = false)
+        }
+        setState(newState, enableLog = false)
     }
 
-    fun updateStatus(status: String, assistantState: AssistantState) {
+    fun updateStatus(status: String, assistantState: AssistantState, enableLog: Boolean = true) {
         controllerScope.launch {
-            updateVisibleState(statusText = status, reason = "updateStatus", assistantState = assistantState)
+            updateVisibleState(statusText = status, reason = "updateStatus", assistantState = assistantState, enableLog = enableLog)
         }
     }
 
-    fun setTaskRunning(running: Boolean, assistantState: AssistantState) {
+    fun setTaskRunning(running: Boolean, assistantState: AssistantState, enableLog: Boolean = true) {
         controllerScope.launch {
-            updateVisibleState(isTaskRunning = running, reason = "setTaskRunning", assistantState = assistantState)
+            updateVisibleState(isTaskRunning = running, reason = "setTaskRunning", assistantState = assistantState, enableLog = enableLog)
         }
     }
     
@@ -647,7 +670,8 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                     FloatingWindowState.TemporarilyHidden(
                         cachedStatusText = currentState.statusText,
                         cachedIsTaskRunning = currentState.isTaskRunning,
-                        cachedOnStopCallback = currentState.onStopCallback
+                        cachedOnStopCallback = currentState.onStopCallback,
+                        cachedAssistantState = currentState.assistantState
                     ),
                     onComplete
                 )
@@ -659,7 +683,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
                         statusText = currentState.cachedStatusText,
                         isTaskRunning = currentState.cachedIsTaskRunning,
                         onStopCallback = currentState.cachedOnStopCallback,
-                        assistantState = AssistantState.Idle
+                        assistantState = currentState.cachedAssistantState
                     ),
                     onComplete
                 )
@@ -783,9 +807,9 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
     suspend fun dismiss() = withContext(Dispatchers.Main) {
         Log.d("FloatingWindow", "dismiss() called")
         val completed = CompletableDeferred<Unit>()
-        setState(FloatingWindowState.Hidden) {
+        setState(FloatingWindowState.Hidden, onComplete = {
             completed.complete(Unit)
-        }
+        })
         completed.await()
     }
 

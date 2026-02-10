@@ -1,12 +1,36 @@
 package com.aotuman.baobaoai.utils;
 
+import android.app.KeyguardManager;
 import android.content.Context;
+import android.os.PowerManager;
 import android.util.Log;
 
 import java.io.DataOutputStream;
 import java.io.PrintWriter;
 
 public class SystemCtrlUtil {
+
+    /**
+     * 判断屏幕是否锁屏
+     */
+    public static boolean isScreenLocked(Context context) {
+        if (context == null) {
+            return false;
+        }
+        KeyguardManager keyguardManager = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
+        return keyguardManager != null && keyguardManager.isKeyguardLocked();
+    }
+
+    /**
+     * 判断屏幕是否息屏
+     */
+    public static boolean isScreenOff(Context context) {
+        if (context == null) {
+            return false;
+        }
+        PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return powerManager != null && !powerManager.isInteractive();
+    }
 
     public static boolean unlockScreen() {
         PrintWriter printWriter = null;

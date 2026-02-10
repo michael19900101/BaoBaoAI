@@ -159,6 +159,9 @@ class AutoGLMService : AccessibilityService() {
                     context = this@AutoGLMService,
                     onWakeUpCallback = {
                         Log.i(TAG, "=== 语音助手唤醒 ===")
+                        if (SystemCtrlUtil.isScreenOff(baseContext)) {
+                            SystemCtrlUtil.unlockScreen()
+                        }
                         // 这里可以添加唤醒后的UI反馈
                         _floatingWindowController?.updateStatus("正在聆听...", AssistantState.Listening("正在聆听..."))
                         _floatingWindowController?.setTaskRunning(true, AssistantState.Listening("正在聆听..."))

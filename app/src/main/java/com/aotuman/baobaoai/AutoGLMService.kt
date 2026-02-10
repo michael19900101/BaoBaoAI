@@ -180,7 +180,6 @@ class AutoGLMService : AccessibilityService() {
                     // 执行核心功能：获取截图->发送给模型->解析响应->执行操作指令
                     serviceScope.launch(Dispatchers.IO) {
                         try{
-//                            testSendMessage(voiceResultText)
                             sendMessage(text = voiceResultText)
                         } catch (e: Exception) {
                             Log.e("AutoGLMService", "Error processing request: ${e.message}", e)
@@ -826,6 +825,9 @@ class AutoGLMService : AccessibilityService() {
                         // Mark task as completed in FloatingWindowController
                         val floatingWindow = AutoGLMService.getInstance()?.floatingWindowController
                         floatingWindow?.markTaskCompleted()
+
+                        // 播放任务完成音效
+                        VoiceAssistantManager.playTaskCompleteSound()
 
                         updateTaskState(TaskEndState.COMPLETED, step)
                         break

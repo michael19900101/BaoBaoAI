@@ -617,6 +617,9 @@ class AutoGLMService : AccessibilityService() {
         if (text.contains("解锁")) {
             SystemCtrlUtil.unlockScreen()
             return true
+        } else if (text.contains("退下")) {
+            stopTask()
+            return true
         }
         return false
     }

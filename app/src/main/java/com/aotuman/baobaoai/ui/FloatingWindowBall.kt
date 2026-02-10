@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -36,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -119,12 +124,6 @@ fun FloatingWindowBall(
         FloatingBall(
             state = assistantState,
             onClick = {
-//                when (state) {
-//                    is AssistantState.Idle -> onStateChange(AssistantState.Listening())
-//                    is AssistantState.Listening -> onStateChange(AssistantState.Processing("正在打开微信..."))
-//                    is AssistantState.Processing -> onStateChange(AssistantState.Success("微信已打开"))
-//                    else -> onStateChange(AssistantState.Idle)
-//                }
             }
         )
     }
@@ -207,6 +206,7 @@ fun FloatingBall(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val (size, color, icon) = when (state) {
         is AssistantState.Idle -> Triple(60.dp, Color(0, 0, 0, alpha = 180), "")
         is AssistantState.Listening -> Triple(48.dp, Color(33, 150, 243, alpha = 240), "🎤")
@@ -214,6 +214,11 @@ fun FloatingBall(
         is AssistantState.Success -> Triple(48.dp, Color(76, 175, 80, alpha = 240), "✅")
         is AssistantState.Error -> Triple(48.dp, Color(244, 67, 54, alpha = 240), "❌")
     }
+
+    // 长按计时器
+    var pressStartTime by remember { mutableLongStateOf(0L) }
+    val coroutineScope = rememberCoroutineScope()
+    val LONG_PRESS_DURATION = 5000L // 5秒长按
 
     // 动画
     val infiniteTransition = rememberInfiniteTransition(label = "ballAnimation")
@@ -251,8 +256,27 @@ fun FloatingBall(
             .alpha(alpha)
             .clip(CircleShape)
             .background(color)
-//            .shadow(4.dp, CircleShape)
-            .clickable { onClick() },
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        onClick()
+                    },
+                    onPress = {
+                        pressStartTime = System.currentTimeMillis()
+                        tryAwaitRelease()
+                        val pressDuration = System.currentTimeMillis() - pressStartTime
+                        if (pressDuration >= LONG_PRESS_DURATION) {
+                            // 长按5秒，关闭无障碍服务
+                            val serviceName = "${context.packageName}/com.aotuman.baobaoai.AutoGLMService"
+                            com.aotuman.baobaoai.utils.SystemCtrlUtil.disableAccessibilityService(
+                                context,
+                                serviceName
+                            )
+                            Log.d("FloatingBall", "Accessibility service disabled by long press")
+                        }
+                    }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         if (state is AssistantState.Idle) {

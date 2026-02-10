@@ -794,7 +794,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         controllerScope.launch {
             if (!isShowing) return@launch
 
-            Log.d("FloatingWindow", "removeAndHide() called", Exception("Stack trace"))
+//            Log.d("FloatingWindow", "removeAndHide() called", Exception("Stack trace"))
             setState(FloatingWindowState.Hidden)
         }
     }

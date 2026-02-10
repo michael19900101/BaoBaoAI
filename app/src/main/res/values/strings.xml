@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">BaoBaoAI</string>
-    <string name="accessibility_service_description">BaoBao AI 语音助手，帮助您通过语音控制手机</string>
+    <string name="accessibility_service_description">BaoBao AI 语音助手：通过语音控制您的手机，支持解锁、应用操作、自动回复等功能</string>
 
     <!-- Floating Window -->
     <string name="fw_ready">准备就绪</string>

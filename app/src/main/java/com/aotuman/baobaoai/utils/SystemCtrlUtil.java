@@ -209,4 +209,92 @@ public class SystemCtrlUtil {
             }
         }
     }
+
+    /**
+     * 使用 root 权限自动启用无障碍服务
+     * @param context 上下文
+     * @param serviceName 无障碍服务的完整名称（格式：包名/服务类名）
+     * @return 是否成功
+     */
+    public static boolean enableAccessibilityService(Context context, String serviceName) {
+        // 先获取当前已启用的服务列表
+        String currentServices = android.provider.Settings.Secure.getString(
+            context.getContentResolver(),
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        );
+
+        // 如果已经包含该服务，直接返回成功
+        if (currentServices != null && currentServices.contains(serviceName)) {
+            Log.d("SystemCtrlUtil", "Accessibility service already enabled: " + serviceName);
+            return true;
+        }
+
+        // 构建新的服务列表
+        String newServices = (currentServices == null || currentServices.isEmpty())
+            ? serviceName
+            : currentServices + ":" + serviceName;
+
+        // 使用 root 权限执行 settings 命令
+        boolean success = RootCommand("settings put secure enabled_accessibility_services " + newServices);
+
+        if (success) {
+            // 启用无障碍功能
+            success = RootCommand("settings put secure accessibility_enabled 1");
+            Log.d("SystemCtrlUtil", "Accessibility service enabled successfully: " + serviceName);
+        } else {
+            Log.e("SystemCtrlUtil", "Failed to enable accessibility service: " + serviceName);
+        }
+
+        return success;
+    }
+
+    /**
+     * 使用 root 权限禁用指定的无障碍服务
+     * @param context 上下文
+     * @param serviceName 无障碍服务的完整名称（格式：包名/服务类名）
+     * @return 是否成功
+     */
+    public static boolean disableAccessibilityService(Context context, String serviceName) {
+        // 先获取当前已启用的服务列表
+        String currentServices = android.provider.Settings.Secure.getString(
+            context.getContentResolver(),
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        );
+
+        // 如果服务列表为空或不包含该服务，直接返回成功
+        if (currentServices == null || currentServices.isEmpty()) {
+            Log.d("SystemCtrlUtil", "No accessibility services enabled, nothing to disable");
+            return true;
+        }
+
+        if (!currentServices.contains(serviceName)) {
+            Log.d("SystemCtrlUtil", "Accessibility service not enabled: " + serviceName);
+            return true;
+        }
+
+        // 从服务列表中移除该服务
+        String newServices = currentServices.replace(serviceName, "")
+            .replaceAll("::+", ":")  // 替换连续的冒号为单个冒号
+            .replaceAll("^:|:$", "");  // 移除开头或结尾的冒号
+
+        // 如果移除后列表为空，禁用无障碍功能
+        boolean success;
+        if (newServices.isEmpty()) {
+            success = RootCommand("settings put secure accessibility_enabled 0");
+            if (success) {
+                success = RootCommand("settings put secure enabled_accessibility_services \"\"");
+            }
+        } else {
+            // 使用 root 权限更新服务列表
+            success = RootCommand("settings put secure enabled_accessibility_services " + newServices);
+        }
+
+        if (success) {
+            Log.d("SystemCtrlUtil", "Accessibility service disabled successfully: " + serviceName);
+        } else {
+            Log.e("SystemCtrlUtil", "Failed to disable accessibility service: " + serviceName);
+        }
+
+        return success;
+    }
 }

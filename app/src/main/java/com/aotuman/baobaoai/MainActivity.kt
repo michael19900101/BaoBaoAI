@@ -34,6 +34,7 @@ import androidx.lifecycle.lifecycleScope
 import com.aotuman.baobaoai.ui.theme.BaoBaoAITheme
 import com.aotuman.baobaoai.utils.SherpaKwsManager
 import com.aotuman.baobaoai.utils.SherpaStreamingManager
+import com.aotuman.baobaoai.utils.SystemCtrlUtil
 import com.aotuman.baobaoai.utils.VoiceAssistantManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -48,6 +49,10 @@ class MainActivity : ComponentActivity() {
     // 模型初始化状态
     private var isModelInitialized = mutableStateOf(false)
     private var isInitializing = mutableStateOf(false)
+
+    // 防抖处理：记录上次点击时间
+    private var lastClickTime = 0L
+    private val CLICK_INTERVAL = 1000L // 1秒防抖间隔
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -128,6 +133,13 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun checkPermissions() {
+        // 防抖处理：检查点击间隔
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastClickTime < CLICK_INTERVAL) {
+            return
+        }
+        lastClickTime = currentTime
+
         // 先检查模型是否已初始化
         if (!isModelInitialized.value) {
             Toast.makeText(this, "请等待模型初始化完成", Toast.LENGTH_SHORT).show()
@@ -191,9 +203,28 @@ class MainActivity : ComponentActivity() {
 
     private fun startAutoGLMService() {
         if (!isAccessibilityServiceEnabled()) {
-            // AccessibilityService未启用，引导用户到设置页面
-            Toast.makeText(this, "请在无障碍设置中启用BaoBao AI语音助手", Toast.LENGTH_LONG).show()
-            navigateToAccessibilitySettings()
+            // 尝试使用 root 权限自动启用无障碍服务
+            if (SystemCtrlUtil.sysHasRootPermission()) {
+                val serviceName = "$packageName/${AutoGLMService::class.java.canonicalName}"
+
+                // todo:这里有个bug,一定先通过 "打开 -> 禁用 -> 打开"的步骤才能成功打开AutoGLMService无障碍服务
+                val op1 = SystemCtrlUtil.enableAccessibilityService(this, serviceName)
+                val op2 = SystemCtrlUtil.disableAccessibilityService(this, serviceName)
+                val op3 = SystemCtrlUtil.enableAccessibilityService(this, serviceName)
+                if (op3) {
+                    Toast.makeText(this, "已自动启用无障碍服务", Toast.LENGTH_SHORT).show()
+                    // 等待一下让服务启动
+                    Thread.sleep(500)
+                } else {
+                    // 自动启用失败，引导用户手动设置
+                    Toast.makeText(this, "自动启用失败，请在无障碍设置中手动启用", Toast.LENGTH_LONG).show()
+                    navigateToAccessibilitySettings()
+                }
+            } else {
+                // 没有 root 权限，引导用户手动设置
+                Toast.makeText(this, "请在无障碍设置中启用BaoBao AI语音助手", Toast.LENGTH_LONG).show()
+                navigateToAccessibilitySettings()
+            }
         } else {
             // AccessibilityService已启用，启动服务
             Toast.makeText(this, "语音助手已启动", Toast.LENGTH_SHORT).show()

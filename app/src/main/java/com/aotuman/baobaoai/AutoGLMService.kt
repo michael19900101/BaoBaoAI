@@ -152,61 +152,70 @@ class AutoGLMService : AccessibilityService() {
 
     private fun startAssistant() {
         serviceScope.launch {
-            // 开始语音助手
-            VoiceAssistantManager.startAssistant(
-                context = this@AutoGLMService,
-                onWakeUpCallback = {
-                    Log.i(TAG, "=== 语音助手唤醒 ===")
-                    // 这里可以添加唤醒后的UI反馈
-                    _floatingWindowController?.updateStatus("正在聆听...", AssistantState.Listening("正在聆听..."))
-                    _floatingWindowController?.setTaskRunning(true, AssistantState.Listening("正在聆听..."))
-                    _floatingWindowController?.setListening(true)
-                },
-                onListeningCallback = { result ->
-                    _floatingWindowController?.updateStatus(result, AssistantState.Listening(result), false)
-                    _floatingWindowController?.setTaskRunning(true, AssistantState.Listening(result), false)
-                    _floatingWindowController?.setListening(true)
-                },
-                onCommandCallback = { result ->
-                    Log.i(TAG, "=== 接收到命令: $result ===")
-                    // 这里可以添加命令处理逻辑
-                    _floatingWindowController?.updateStatus(result, AssistantState.Processing(result))
-                    _floatingWindowController?.updateSpeechText(result)
-                    _floatingWindowController?.setTaskRunning(true, AssistantState.Processing(result))
-                    _floatingWindowController?.setListening(false)
+            try {
+                Log.d(TAG, "Starting VoiceAssistantManager...")
+                // 开始语音助手
+                VoiceAssistantManager.startAssistant(
+                    context = this@AutoGLMService,
+                    onWakeUpCallback = {
+                        Log.i(TAG, "=== 语音助手唤醒 ===")
+                        // 这里可以添加唤醒后的UI反馈
+                        _floatingWindowController?.updateStatus("正在聆听...", AssistantState.Listening("正在聆听..."))
+                        _floatingWindowController?.setTaskRunning(true, AssistantState.Listening("正在聆听..."))
+                        _floatingWindowController?.setListening(true)
+                    },
+                    onListeningCallback = { result ->
+                        _floatingWindowController?.updateStatus(result, AssistantState.Listening(result), false)
+                        _floatingWindowController?.setTaskRunning(true, AssistantState.Listening(result), false)
+                        _floatingWindowController?.setListening(true)
+                    },
+                    onCommandCallback = { result ->
+                        Log.i(TAG, "=== 接收到命令: $result ===")
+                        // 这里可以添加命令处理逻辑
+                        _floatingWindowController?.updateStatus(result, AssistantState.Processing(result))
+                        _floatingWindowController?.updateSpeechText(result)
+                        _floatingWindowController?.setTaskRunning(true, AssistantState.Processing(result))
+                        _floatingWindowController?.setListening(false)
 
 
-                    var voiceResultText = result
-                    // 执行核心功能：获取截图->发送给模型->解析响应->执行操作指令
-                    serviceScope.launch(Dispatchers.IO) {
-                        try{
-                            sendMessage(text = voiceResultText)
-                        } catch (e: Exception) {
-                            Log.e("AutoGLMService", "Error processing request: ${e.message}", e)
-                            withContext(Dispatchers.Main) {
-                                _floatingWindowController?.updateStatus("处理请求时出错: ${e.message}", AssistantState.Error("处理请求时出错: ${e.message}"))
+                        var voiceResultText = result
+                        // 执行核心功能：获取截图->发送给模型->解析响应->执行操作指令
+                        serviceScope.launch(Dispatchers.IO) {
+                            try{
+                                sendMessage(text = voiceResultText)
+                            } catch (e: Exception) {
+                                Log.e("AutoGLMService", "Error processing request: ${e.message}", e)
+                                withContext(Dispatchers.Main) {
+                                    _floatingWindowController?.updateStatus("处理请求时出错: ${e.message}", AssistantState.Error("处理请求时出错: ${e.message}"))
+                                }
                             }
                         }
+                    },
+                    onSleepCallback = {
+                        Log.i(TAG, "=== 语音助手休眠 ===")
+                        // 这里可以添加休眠后的UI反馈
+                    },
+                    onErrorCallback = {
+                        Log.e(TAG, "=== 语音助手错误: $it ===")
+                        // 这里可以添加错误处理逻辑
+                        speechText = "识别失败，请重试"
+                        isListening = false
+                        _floatingWindowController?.updateStatus("识别失败，请重试", AssistantState.Error("识别失败，请重试"))
+                        _floatingWindowController?.setTaskRunning(false, AssistantState.Error("识别失败，请重试"))
+                        _floatingWindowController?.setListening(false)
                     }
-                },
-                onSleepCallback = {
-                    Log.i(TAG, "=== 语音助手休眠 ===")
-                    // 这里可以添加休眠后的UI反馈
-                },
-                onErrorCallback = {
-                    Log.e(TAG, "=== 语音助手错误: $it ===")
-                    // 这里可以添加错误处理逻辑
-                    speechText = "识别失败，请重试"
-                    isListening = false
-                    _floatingWindowController?.updateStatus("识别失败，请重试", AssistantState.Error("识别失败，请重试"))
-                    _floatingWindowController?.setTaskRunning(false, AssistantState.Error("识别失败，请重试"))
-                    _floatingWindowController?.setListening(false)
-                }
-            )
+                )
 
-            Log.i(TAG, "语音助手启动成功")
-            Log.i(TAG, "请说 '你好,包包' 来唤醒语音助手")
-            Log.i(TAG, "唤醒后请说出您的命令")
+                Log.i(TAG, "语音助手启动成功")
+                Log.i(TAG, "请说 '你好,包包' 来唤醒语音助手")
+                Log.i(TAG, "唤醒后请说出您的命令")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in startAssistant: ${e.message}", e)
+                _floatingWindowController?.updateStatus(
+                    "语音助手启动失败: ${e.message}",
+                    AssistantState.Error("语音助手启动失败")
+                )
+            }
         }
     }
 

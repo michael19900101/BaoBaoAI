@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -30,25 +32,23 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import com.aotuman.baobaoai.ui.theme.BaoBaoAITheme
-import com.aotuman.baobaoai.utils.SherpaVadManager
 import com.aotuman.baobaoai.utils.SherpaKwsManager
-import com.aotuman.baobaoai.utils.SherpaModelManager
 import com.aotuman.baobaoai.utils.SherpaStreamingManager
-import com.aotuman.baobaoai.utils.SpeechRecognizerManager
 import com.aotuman.baobaoai.utils.VoiceAssistantManager
-import com.aotuman.baobaoai.utils.VoiceAssistantTest
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
-    
+
     private val permissions = arrayOf(
         Manifest.permission.RECORD_AUDIO,
         Manifest.permission.MODIFY_AUDIO_SETTINGS
     )
-    
+
+    // 模型初始化状态
+    private var isModelInitialized = mutableStateOf(false)
+    private var isInitializing = mutableStateOf(false)
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "需要录音权限才能使用语音助手", Toast.LENGTH_SHORT).show()
         }
     }
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         initVoiceAssistant()
@@ -69,6 +69,8 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) {
                     MainScreen(
                         onStartAssistant = { checkPermissions() },
+                        isModelInitialized = isModelInitialized.value,
+                        isInitializing = isInitializing.value,
                         modifier = Modifier.padding(it)
                     )
                 }
@@ -79,19 +81,64 @@ class MainActivity : ComponentActivity() {
     private fun initVoiceAssistant(){
         lifecycleScope.launch {
             try {
+                isInitializing.value = true
+                Log.d("MainActivity", "Initializing voice assistant models...")
+
+                // 初始化 Sherpa 模型
                 VoiceAssistantManager.initialize(this@MainActivity)
+
+                // 等待模型初始化完成
+                val kwsReady = SherpaKwsManager.modelState.value is SherpaKwsManager.ModelState.Ready
+                val streamingReady = SherpaStreamingManager.modelState.value is SherpaStreamingManager.ModelState.Ready
+
+                Log.d("MainActivity", "KWS model ready: $kwsReady, Streaming model ready: $streamingReady")
+
+                if (kwsReady && streamingReady) {
+                    // 初始化 ModelClient
+                    Log.d("MainActivity", "Initializing ModelClient...")
+                    Log.d("MainActivity", "ModelClient initialized and set to AutoGLMService successfully")
+
+                    isModelInitialized.value = true
+                    isInitializing.value = false
+                    Log.d("MainActivity", "All models initialized successfully")
+                } else {
+                    // 等待一段时间再检查
+                    delay(2000)
+                    val kwsReady2 = SherpaKwsManager.modelState.value is SherpaKwsManager.ModelState.Ready
+                    val streamingReady2 = SherpaStreamingManager.modelState.value is SherpaStreamingManager.ModelState.Ready
+
+                    if (kwsReady2 && streamingReady2) {
+                        isModelInitialized.value = true
+                        isInitializing.value = false
+                        Log.d("MainActivity", "All models initialized successfully (after delay)")
+                    } else {
+                        isInitializing.value = false
+                        val errorMsg = "模型初始化失败: KWS=$kwsReady2, Streaming=$streamingReady2"
+                        Log.e("MainActivity", errorMsg)
+                        Toast.makeText(this@MainActivity, errorMsg, Toast.LENGTH_LONG).show()
+                    }
+                }
             } catch (e: Exception) {
+                isInitializing.value = false
                 e.printStackTrace()
+                Log.e("MainActivity", "Error initializing voice assistant: ${e.message}", e)
+                Toast.makeText(this@MainActivity, "语音助手初始化失败: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
     
     private fun checkPermissions() {
+        // 先检查模型是否已初始化
+        if (!isModelInitialized.value) {
+            Toast.makeText(this, "请等待模型初始化完成", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val hasPermissions = permissions.all { 
+            val hasPermissions = permissions.all {
                 ActivityCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
             }
-            
+
             if (hasPermissions) {
                 checkOverlayPermission()
             } else {
@@ -188,7 +235,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(onStartAssistant: () -> Unit, modifier: Modifier = Modifier) {
+fun MainScreen(
+    onStartAssistant: () -> Unit,
+    isModelInitialized: Boolean,
+    isInitializing: Boolean,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -199,8 +251,35 @@ fun MainScreen(onStartAssistant: () -> Unit, modifier: Modifier = Modifier) {
             fontSize = 24.sp,
             modifier = Modifier.padding(bottom = 24.dp)
         )
-        Button(onClick = onStartAssistant) {
-            Text(text = "启动语音助手")
+
+        // 显示初始化状态
+        when {
+            isInitializing -> {
+                CircularProgressIndicator(modifier = Modifier.padding(bottom = 16.dp))
+                Text(
+                    text = "正在加载模型，请稍候...",
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Button(onClick = {}, enabled = false) {
+                    Text(text = "启动语音助手")
+                }
+            }
+            isModelInitialized -> {
+                Button(onClick = onStartAssistant) {
+                    Text(text = "启动语音助手")
+                }
+            }
+            else -> {
+                Button(onClick = onStartAssistant, enabled = false) {
+                    Text(text = "启动语音助手")
+                }
+                Text(
+                    text = "模型初始化失败，请重试",
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
         }
     }
 }

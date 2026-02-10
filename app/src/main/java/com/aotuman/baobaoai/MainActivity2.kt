@@ -73,6 +73,8 @@ class MainActivity2 : ComponentActivity() {
                             voiceAssistantTest.testVoiceAssistant(this)
 //                            initialStreaming()
                                            },
+                        isModelInitialized = false, // MainActivity2 不需要初始化检查，默认为true
+                        isInitializing = false, // MainActivity2 不显示初始化状态
                         modifier = Modifier.padding(it)
                     )
                 }

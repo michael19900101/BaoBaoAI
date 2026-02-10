@@ -58,14 +58,19 @@ object VoiceAssistantManager {
         onSleepCallback: () -> Unit,
         onErrorCallback: (String) -> Unit
     ) {
-        onWakeUp = onWakeUpCallback
-        onListening = onListeningCallback
-        onCommand = onCommandCallback
-        onSleep = onSleepCallback
-        onError = onErrorCallback
-        
-        // 开始关键词监听
-        startKwsListening(context)
+        try {
+            onWakeUp = onWakeUpCallback
+            onListening = onListeningCallback
+            onCommand = onCommandCallback
+            onSleep = onSleepCallback
+            onError = onErrorCallback
+
+            // 开始关键词监听
+            startKwsListening(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting assistant: ${e.message}", e)
+            onError?.invoke("启动语音助手失败: ${e.message}")
+        }
     }
     
     // 停止语音助手
@@ -80,24 +85,29 @@ object VoiceAssistantManager {
     
     // 开始关键词监听
     private fun startKwsListening(context: Context) {
-        Log.i(TAG, "开始关键词监听")
-        _state.value = AssistantState.Sleeping
-        
-        SherpaKwsManager.startListening(
-            context = context,
-            listener = object : SherpaKwsManager.KeywordDetectionListener {
-                override fun onKeywordDetected(keyword: String) {
-                    Log.i(TAG, "检测到关键词: $keyword")
-                    // 唤醒
-                    wakeUp(context)
+        try {
+            Log.i(TAG, "开始关键词监听")
+            _state.value = AssistantState.Sleeping
+
+            SherpaKwsManager.startListening(
+                context = context,
+                listener = object : SherpaKwsManager.KeywordDetectionListener {
+                    override fun onKeywordDetected(keyword: String) {
+                        Log.i(TAG, "检测到关键词: $keyword")
+                        // 唤醒
+                        wakeUp(context)
+                    }
+
+                    override fun onError(errorCode: Int, errorMessage: String) {
+                        Log.e(TAG, "KWS错误: $errorMessage")
+                        onError?.invoke("关键词监听错误: $errorMessage")
+                    }
                 }
-                
-                override fun onError(errorCode: Int, errorMessage: String) {
-                    Log.e(TAG, "KWS错误: $errorMessage")
-                    onError?.invoke("关键词监听错误: $errorMessage")
-                }
-            }
-        )
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting KWS listening: ${e.message}", e)
+            onError?.invoke("启动关键词监听失败: ${e.message}")
+        }
     }
     
     // 唤醒

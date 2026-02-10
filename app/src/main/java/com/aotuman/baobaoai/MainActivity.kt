@@ -208,11 +208,12 @@ class MainActivity : ComponentActivity() {
                 val serviceName = "$packageName/${AutoGLMService::class.java.canonicalName}"
 
 //                 todo:这里有个bug,一定先通过 "打开 -> 禁用 -> 打开"的步骤才能成功打开AutoGLMService无障碍服务
-//                val op1 = SystemCtrlUtil.enableAccessibilityService(this, serviceName)
-//                val op2 = SystemCtrlUtil.disableAccessibilityService(this, serviceName)
+                val op1 = SystemCtrlUtil.enableAccessibilityService(this, serviceName)
+                val op2 = SystemCtrlUtil.disableAccessibilityService(this, serviceName)
                 val op3 = SystemCtrlUtil.enableAccessibilityService(this, serviceName)
                 if (op3) {
-                    Toast.makeText(this, "已自动启用无障碍服务", Toast.LENGTH_SHORT).show()
+                    Log.d("MainActivity", "已自动启用无障碍服务")
+//                    Toast.makeText(this, "已自动启用无障碍服务", Toast.LENGTH_SHORT).show()
                     // 等待一下让服务启动
                     Thread.sleep(500)
                 } else {

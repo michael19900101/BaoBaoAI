@@ -749,7 +749,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
         val targetInBottomHalf = targetY > screenHeight / 2
 
         val newY = if (targetInBottomHalf) {
-            screenHeight - 300 // Top (distance from bottom)
+            screenHeight - 500 // Top (distance from bottom)
         } else {
             20 // Bottom (distance from bottom)
         }
@@ -772,7 +772,7 @@ class FloatingWindowController(private val context: Context) : LifecycleOwner, V
             if (_stateFlow.value !is FloatingWindowState.Visible) return@launch
             
             val screenHeight = DisplayUtils.getScreenHeight(context)
-            val newY = screenHeight - 400 // Move well away from bottom area
+            val newY = screenHeight - 500 // Move well away from bottom area
             
             // Only update if not already near top
             if (windowParams.y < newY - 100) { // If current Y is significantly less than target (i.e., lower on screen)

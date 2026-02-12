@@ -182,7 +182,7 @@ object ActionParser {
         val cleanAction = actionString.trim()
 
         // 1. Try to match finish(message="...")
-        val finishRegex = Regex("""finish\s*\(\s*message\s*=\s*["'](.*?)["']\s*\)""", RegexOption.IGNORE_CASE)
+        val finishRegex = Regex("""finish\s*\(\s*message\s*=\s*["'](.*?)["']\s*\)""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
         finishRegex.find(cleanAction)?.let {
             return ParsedAction(
                 type = ActionType.FINISH,
@@ -285,7 +285,7 @@ object ActionParser {
         Log.d("ActionParser", "Parsing action: $cleanAction")
 
         // 1. Try to match finish(message="...")
-        val finishRegex = Regex("""finish\s*\(\s*message\s*=\s*["'](.*?)["']\s*\)""", RegexOption.IGNORE_CASE)
+        val finishRegex = Regex("""finish\s*\(\s*message\s*=\s*["'](.*?)["']\s*\)""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
         finishRegex.find(cleanAction)?.let {
             return Action.Finish(it.groupValues[1])
         }
